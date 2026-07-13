@@ -1,0 +1,53 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Python: install dependencies",
+      "type": "shell",
+      "command": "uv sync",
+      "problemMatcher": []
+    },
+    {
+      "label": "Kestra: validate flows",
+      "type": "shell",
+      "command": "python scripts/validate_flows.py",
+      "problemMatcher": []
+    },
+    {
+      "label": "Kestra: deploy flows",
+      "type": "shell",
+      "command": "python scripts/kestra_api.py deploy",
+      "problemMatcher": []
+    },
+    {
+      "label": "Kestra: run default flow",
+      "type": "shell",
+      "command": "python scripts/kestra_api.py run",
+      "problemMatcher": []
+    },
+    {
+      "label": "Pipeline: run locally",
+      "type": "shell",
+      "command": "python src/usecase_pipeline/main.py --project-dir . --input-file 활용사례_자동화_검색.xlsx --dataset-id local-check --run-mode manual",
+      "problemMatcher": []
+    },
+    {
+      "label": "GPT Search: dry run",
+      "type": "shell",
+      "command": "python src/usecase_pipeline/gpt_search.py --project-dir . --input-file 활용사례_자동화_검색.xlsx --mode dry-run --max-rows 10",
+      "problemMatcher": []
+    },
+    {
+      "label": "Browser Search: install browser",
+      "type": "shell",
+      "command": "python -m playwright install chromium",
+      "problemMatcher": []
+    },
+    {
+      "label": "Browser Search: run",
+      "type": "shell",
+      "command": "python src/usecase_pipeline/browser_search.py --project-dir . --input-file 활용사례_자동화_검색.xlsx --max-rows 10 --max-results 5",
+      "problemMatcher": []
+    }
+  ]
+}

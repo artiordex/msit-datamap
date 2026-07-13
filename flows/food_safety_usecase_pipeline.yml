@@ -1,0 +1,143 @@
+id: food_safety_usecase_pipeline
+namespace: mfds.usecase
+description: Food-safety use-case automation pipeline managed from VS Code and Git.
+
+labels:
+  project: food-safety
+  workspace: usecase
+  owner: mfds
+
+triggers:
+  - id: weekday_0900_kst
+    type: io.kestra.plugin.core.trigger.Schedule
+    cron: "0 9 * * 1-5"
+    timezone: Asia/Seoul
+
+inputs:
+  - id: project_dir
+    type: STRING
+    defaults: C:/식약처/활용사례
+  - id: input_file
+    type: STRING
+    defaults: 활용사례_자동화_검색.xlsx
+  - id: run_mode
+    type: STRING
+    defaults: incremental
+  - id: enable_gpt_search
+    type: BOOL
+    defaults: false
+  - id: gpt_search_mode
+    type: STRING
+    defaults: dry-run
+  - id: gpt_search_max_rows
+    type: INT
+    defaults: 10
+  - id: enable_browser_search
+    type: BOOL
+    defaults: false
+  - id: browser_search_max_rows
+    type: INT
+    defaults: 10
+  - id: browser_search_max_results
+    type: INT
+    defaults: 5
+  - id: dataset_ids
+    type: ARRAY
+    itemType: STRING
+    defaults:
+      - usecase_search
+      - summary_index
+      - quality_check
+
+tasks:
+  - id: start_log
+    type: io.kestra.plugin.core.log.Log
+    message: "Start {{ flow.id }} mode={{ inputs.run_mode }} file={{ inputs.input_file }}"
+
+  - id: process_each_dataset
+    type: io.kestra.plugin.core.flow.ForEach
+    values: "{{ inputs.dataset_ids }}"
+    concurrencyLimit: 2
+    tasks:
+      - id: process_and_audit
+        type: io.kestra.plugin.core.flow.Parallel
+        tasks:
+          - id: process_dataset
+            type: io.kestra.plugin.scripts.python.Commands
+            taskRunner:
+              type: io.kestra.plugin.core.runner.Process
+            env:
+              PYTHONIOENCODING: utf-8
+            commands:
+              - python "{{ inputs.project_dir }}/src/usecase_pipeline/main.py" --project-dir "{{ inputs.project_dir }}" --input-file "{{ inputs.input_file }}" --dataset-id "{{ parent.taskrun.value }}" --run-mode "{{ inputs.run_mode }}"
+            timeout: PT30M
+            retry:
+              type: constant
+              interval: PT1M
+              maxAttempts: 3
+              maxDuration: PT45M
+              warningOnRetry: true
+
+          - id: audit_log
+            type: io.kestra.plugin.core.log.Log
+            message: "Queued dataset={{ parent.taskrun.value }} execution={{ execution.id }}"
+
+  - id: finalize_results
+    type: io.kestra.plugin.scripts.python.Commands
+    taskRunner:
+      type: io.kestra.plugin.core.runner.Process
+    env:
+      PYTHONIOENCODING: utf-8
+    commands:
+      - python "{{ inputs.project_dir }}/src/usecase_pipeline/main.py" --project-dir "{{ inputs.project_dir }}" --input-file "{{ inputs.input_file }}" --dataset-id all --run-mode "{{ inputs.run_mode }}" --finalize
+    timeout: PT10M
+
+  - id: optional_gpt_web_search
+    type: io.kestra.plugin.core.flow.If
+    condition: "{{ inputs.enable_gpt_search }}"
+    then:
+      - id: run_gpt_web_search
+        type: io.kestra.plugin.scripts.python.Commands
+        taskRunner:
+          type: io.kestra.plugin.core.runner.Process
+        env:
+          PYTHONIOENCODING: utf-8
+        commands:
+          - python "{{ inputs.project_dir }}/src/usecase_pipeline/gpt_search.py" --project-dir "{{ inputs.project_dir }}" --input-file "{{ inputs.input_file }}" --mode "{{ inputs.gpt_search_mode }}" --max-rows "{{ inputs.gpt_search_max_rows }}"
+        timeout: PT1H
+        retry:
+          type: constant
+          interval: PT2M
+          maxAttempts: 3
+          maxDuration: PT90M
+          warningOnRetry: true
+
+  - id: optional_browser_web_search
+    type: io.kestra.plugin.core.flow.If
+    condition: "{{ inputs.enable_browser_search }}"
+    then:
+      - id: run_browser_web_search
+        type: io.kestra.plugin.scripts.python.Commands
+        taskRunner:
+          type: io.kestra.plugin.core.runner.Process
+        env:
+          PYTHONIOENCODING: utf-8
+        commands:
+          - python "{{ inputs.project_dir }}/src/usecase_pipeline/browser_search.py" --project-dir "{{ inputs.project_dir }}" --input-file "{{ inputs.input_file }}" --max-rows "{{ inputs.browser_search_max_rows }}" --max-results "{{ inputs.browser_search_max_results }}"
+        timeout: PT1H
+        retry:
+          type: constant
+          interval: PT2M
+          maxAttempts: 2
+          maxDuration: PT90M
+          warningOnRetry: true
+
+errors:
+  - id: failure_log
+    type: io.kestra.plugin.core.log.Log
+    message: "Failed {{ flow.id }} execution={{ execution.id }} state={{ execution.state.current }}"
+
+finally:
+  - id: done_log
+    type: io.kestra.plugin.core.log.Log
+    message: "Done {{ flow.id }} execution={{ execution.id }} state={{ execution.state.current }}"
