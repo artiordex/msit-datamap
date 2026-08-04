@@ -1,0 +1,132 @@
+name: Weekly MSIT Crawler
+run-name: MSIT crawler (${{ github.event.inputs.run_reason || github.event.client_payload.run_reason || github.event.action || github.event_name }})
+
+on:
+  schedule:
+    - cron: '0 0 * * 1'  # 매주 월요일 09:00 KST (= UTC 00:00)
+  workflow_dispatch:       # 수동 실행 버튼
+    inputs:
+      notify_slack:
+        description: 'Slack incoming webhook으로 실행 결과 알림'
+        type: boolean
+        required: true
+        default: true
+      publish_pubsub:
+        description: 'Redis Pub/Sub으로 실행 결과 발행'
+        type: boolean
+        required: true
+        default: false
+      run_reason:
+        description: '수동 실행 사유'
+        type: string
+        required: false
+        default: 'manual'
+  repository_dispatch:     # 외부 webhook/GitHub API에서 실행
+    types:
+      - msit-weekly-crawl
+      - msit-weekly-crawl-webhook
+      - msit-weekly-crawl-pubsub
+      - slack-msit-weekly-crawl
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      REDIS_URL: ${{ secrets.REDIS_URL }}
+      REDIS_CHANNEL: ${{ vars.REDIS_CHANNEL || 'msit:pipeline:events' }}
+      RUN_SOURCE: ${{ github.event_name == 'schedule' && 'schedule' || github.event_name == 'workflow_dispatch' && 'manual' || github.event.action }}
+      RUN_REASON: ${{ github.event.inputs.run_reason || github.event.client_payload.run_reason || github.event.action || github.event_name }}
+      NOTIFY_SLACK: ${{ github.event_name == 'schedule' || github.event_name == 'repository_dispatch' || github.event.inputs.notify_slack != 'false' }}
+      PUBLISH_PUBSUB: ${{ github.event_name == 'schedule' || github.event_name == 'repository_dispatch' || github.event.inputs.publish_pubsub == 'true' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium --with-deps
+
+      - name: Run crawler
+        run: node crawler/crawler_api_과기부.js --fresh --output crawler/data_go_kr/datamap.json
+
+      - name: Copy latest datamap to public
+        run: node scripts/copy_datamap.js
+
+      - name: Summarize datamap
+        if: always()
+        run: |
+          node -e "const fs=require('fs');const p='crawler/data_go_kr/datamap.json';if(!fs.existsSync(p)){process.exit(0)}const data=JSON.parse(fs.readFileSync(p,'utf8'));const orgs=data.organizations||[];const file=orgs.reduce((n,o)=>n+(o.file||[]).length,0);const api=orgs.reduce((n,o)=>n+(o.api||[]).length,0);const errors=orgs.reduce((n,o)=>n+(o.errors||[]).length,0);fs.appendFileSync(process.env.GITHUB_ENV,`DATAMAP_ORGS=${orgs.length}\nDATAMAP_FILE=${file}\nDATAMAP_API=${api}\nDATAMAP_ERRORS=${errors}\n`);"
+
+      - name: Upload datamap artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: msit-datamap-${{ github.run_id }}
+          path: |
+            crawler/data_go_kr/datamap.json
+            datamap-web/public/data/datamap.json
+          if-no-files-found: warn
+
+      - name: Publish Pub/Sub event (success)
+        if: success() && env.PUBLISH_PUBSUB == 'true'
+        run: |
+          if [ -z "$REDIS_URL" ]; then
+            echo "REDIS_URL secret is not set; skip pubsub publish."
+            exit 0
+          fi
+          node scripts/redis_publisher.js \
+            --channel "$REDIS_CHANNEL" \
+            --status success \
+            --flow weekly-crawl \
+            --execution "${{ github.run_id }}" \
+            --task "$RUN_SOURCE"
+
+      - name: Publish Pub/Sub event (failure)
+        if: failure() && env.PUBLISH_PUBSUB == 'true'
+        run: |
+          if [ -z "$REDIS_URL" ]; then
+            echo "REDIS_URL secret is not set; skip pubsub publish."
+            exit 0
+          fi
+          node scripts/redis_publisher.js \
+            --channel "$REDIS_CHANNEL" \
+            --status failure \
+            --flow weekly-crawl \
+            --execution "${{ github.run_id }}" \
+            --task "$RUN_SOURCE"
+
+      - name: Notify Slack (success)
+        if: success() && env.NOTIFY_SLACK == 'true'
+        run: |
+          if [ -z "$SLACK_WEBHOOK_URL" ]; then
+            echo "SLACK_WEBHOOK_URL secret is not set; skip Slack notification."
+            exit 0
+          fi
+          curl -s -X POST "$SLACK_WEBHOOK_URL" \
+            -H 'Content-Type: application/json' \
+            -d "{\"text\": \":large_green_circle: *weekly-crawl* 완료\\n실행방식: \`${RUN_SOURCE}\`\\n사유: \`${RUN_REASON}\`\\n기관: \`${DATAMAP_ORGS:-0}\`, FILE: \`${DATAMAP_FILE:-0}\`, API: \`${DATAMAP_API:-0}\`, errors: \`${DATAMAP_ERRORS:-0}\`\\n실행ID: \`${{ github.run_id }}\`\\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|GitHub Actions에서 보기>\"}"
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Notify Slack (failure)
+        if: failure() && env.NOTIFY_SLACK == 'true'
+        run: |
+          if [ -z "$SLACK_WEBHOOK_URL" ]; then
+            echo "SLACK_WEBHOOK_URL secret is not set; skip Slack notification."
+            exit 0
+          fi
+          curl -s -X POST "$SLACK_WEBHOOK_URL" \
+            -H 'Content-Type: application/json' \
+            -d "{\"text\": \":red_circle: *weekly-crawl* 실패\\n실행방식: \`${RUN_SOURCE}\`\\n사유: \`${RUN_REASON}\`\\n기관: \`${DATAMAP_ORGS:-0}\`, FILE: \`${DATAMAP_FILE:-0}\`, API: \`${DATAMAP_API:-0}\`, errors: \`${DATAMAP_ERRORS:-0}\`\\n실행ID: \`${{ github.run_id }}\`\\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|로그 보기>\"}"
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

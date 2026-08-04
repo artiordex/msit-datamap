@@ -137,6 +137,14 @@ errors:
     type: io.kestra.plugin.core.log.Log
     message: "Failed {{ flow.id }} execution={{ execution.id }} state={{ execution.state.current }}"
 
+  - id: notify_failure
+    type: io.kestra.plugin.notifications.slack.SlackIncomingWebhook
+    url: "{{ envs.slack_webhook_url }}"
+    payload: |
+      {
+        "text": ":red_circle: *{{ flow.id }}* 실패\n실행ID: `{{ execution.id }}`\n실패태스크: `{{ taskrun.id }}`\n시각: {{ execution.startDate | date('yyyy-MM-dd HH:mm', 'Asia/Seoul') }}\n<{{ envs.kestra_base_url }}/ui/executions/{{ flow.namespace }}/{{ flow.id }}/{{ execution.id }}|Kestra에서 보기>"
+      }
+
 finally:
   - id: done_log
     type: io.kestra.plugin.core.log.Log
