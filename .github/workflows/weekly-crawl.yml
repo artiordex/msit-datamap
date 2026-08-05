@@ -63,6 +63,11 @@ jobs:
       - name: Install Playwright Chromium
         run: npx playwright install chromium --with-deps
 
+      - name: Check data.go.kr connectivity
+        run: |
+          curl -I --max-time 30 https://www.data.go.kr/ || true
+          curl -I --max-time 30 https://www.data.go.kr/tcs/dss/selectDataSetList.do || true
+
       - name: Run crawler
         run: node crawler/crawler_api_과기부.js --fresh
 

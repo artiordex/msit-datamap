@@ -26,7 +26,7 @@ const logger       = require('../utils/logger');
 const BASE_URL   = 'https://www.data.go.kr';
 const LIST_URL   = `${BASE_URL}/tcs/dss/selectDataSetList.do`;
 const OUTPUT_DIR = __dirname;
-const TIMEOUT    = 60_000;
+const TIMEOUT    = 120_000;
 const UA         =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
   '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
@@ -100,6 +100,29 @@ function getArg(name) {
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 function clean(s) { return String(s ?? '').replace(/\s+/g, ' ').trim(); }
+
+async function gotoWithRetry(page, url, options = {}) {
+  const attempts = options.attempts ?? 3;
+  const timeout = options.timeout ?? TIMEOUT;
+  const waitUntil = options.waitUntil ?? 'commit';
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      logger.info({ url, attempt, attempts }, '페이지 이동을 시도함');
+      return await page.goto(url, { waitUntil, timeout });
+    } catch (err) {
+      lastError = err;
+      logger.warn(
+        { url, attempt, attempts, err: { name: err.name, message: err.message } },
+        '페이지 이동에 실패해 재시도함'
+      );
+      if (attempt < attempts) await sleep(5000 * attempt);
+    }
+  }
+
+  throw lastError;
+}
 
 function typeLabel(dType) {
   return TYPE_LABELS[dType] ?? clean(dType);
@@ -465,36 +488,14 @@ async function closeHomePopups(page) {
 }
 
 async function goToDataSetList(page) {
-  await page.goto(`${BASE_URL}/`, { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
-  await closeHomePopups(page);
-  await waitUi(300);
-
-  const menuButton = page.locator('button[data-trigger="gnb"]').first();
-  if (await menuButton.isVisible({ timeout: 3000 }).catch(() => false)) {
-    // 상단 전체 메뉴 버튼을 누름
-    await menuButton.click({ force: true }).catch(() => null);
-    await waitUi(300);
-  }
-
-  const dataListLink = page.locator('a[onclick*="selectDataSetList.do"]').first();
-  if (await dataListLink.isVisible({ timeout: 3000 }).catch(() => false)) {
-    await Promise.all([
-      page.waitForLoadState('domcontentloaded').catch(() => null),
-      // 공공데이터 목록 메뉴 링크를 누름
-      dataListLink.click({ force: true }),
-    ]).catch(() => null);
-  }
-
-  if (!page.url().includes('selectDataSetList')) {
-    await page.goto(LIST_URL, { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
-  }
+  await gotoWithRetry(page, LIST_URL);
   await page.waitForSelector('button[data-target="detail-search-modal"]', { timeout: TIMEOUT });
   await waitUi(500);
 }
 
 async function ensureOnListPage(page) {
   if (!page.url().includes('selectDataSetList')) {
-    await page.goto(LIST_URL, { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
+    await gotoWithRetry(page, LIST_URL);
     await waitUi(500);
   }
 
