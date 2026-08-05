@@ -25,9 +25,6 @@ type RawTypeDetails = Record<string, RawDetail | undefined>;
 
 type RawItem = {
   [key: string]: unknown;
-  href?: string;
-  title?: string;
-  type?: "FILE" | "API" | string;
   "링크"?: string;
   "제목"?: string;
   "유형"?: string;
@@ -415,10 +412,13 @@ type IconName =
   | "chevronUp"
   | "chevronsLeft"
   | "chevronsRight"
+  | "collapseView"
   | "fitView"
   | "help"
   | "home"
   | "minus"
+  | "pause"
+  | "play"
   | "plus"
   | "rotateCcw"
   | "search"
@@ -790,6 +790,19 @@ function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
           <path d="m13 17 5-5-5-5" />
         </svg>
       );
+    case "collapseView":
+      return (
+        <svg {...iconProps}>
+          <path d="M9 3v6H3" />
+          <path d="m3 3 6 6" />
+          <path d="M15 3v6h6" />
+          <path d="m21 3-6 6" />
+          <path d="M9 21v-6H3" />
+          <path d="m3 21 6-6" />
+          <path d="M15 21v-6h6" />
+          <path d="m21 21-6-6" />
+        </svg>
+      );
     case "fitView":
       return (
         <svg {...iconProps}>
@@ -825,6 +838,19 @@ function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
           <path d="M5 12h14" />
         </svg>
       );
+    case "pause":
+      return (
+        <svg {...iconProps}>
+          <path d="M9 6v12" />
+          <path d="M15 6v12" />
+        </svg>
+      );
+    case "play":
+      return (
+        <svg {...iconProps} fill="currentColor" stroke="none">
+          <path d="M8 5v14l11-7z" />
+        </svg>
+      );
     case "plus":
       return (
         <svg {...iconProps}>
@@ -856,11 +882,1681 @@ function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
   }
 }
 
+type GuideTargetRect = {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+};
+
+type GuideStep = {
+  id:
+  | "kind"
+  | "org"
+  | "mapSearch"
+  | "detailSearch"
+  | "keyword"
+  | "controls"
+  | "level1Node"
+  | "level2Node"
+  | "dataList"
+  | "portalLink";
+  badge: string;
+  label: string;
+  title: string;
+  body: string[];
+  targetSelectors: string[];
+  clickPoint: {
+    x: number;
+    y: number;
+  };
+  panelSide?: "left" | "right" | "top" | "bottom";
+  substeps?: GuideSubStep[];
+};
+
+type GuideSubStep = {
+  label: string;
+  targetSelectors: string[];
+  clickPoint: {
+    x: number;
+    y: number;
+  };
+};
+
+const guideFixedKind: KindFilter = "hybrid";
+const guideFixedOrg = "과학기술정보통신부";
+const guideMapSearchTerm = "기술";
+const guideDetailSearchTerm = "데이터";
+const guideKeywordTerm = "과학기술연구";
+const guideFanRecordLabels = [
+  "과학기술 연구개발",
+  "국가연구개발사업 조사분석",
+  "연구개발비 통계",
+  "기술무역 현황",
+  "기업 연구개발 활동",
+  "연구기관 현황",
+  "기술수준 평가",
+  "과학기술 인력",
+  "ICT 연구성과",
+  "기초연구 지원",
+  "원천기술 개발",
+  "첨단기술 동향",
+  "과학기술 정책",
+  "기술사업화",
+  "국가전략기술",
+  "연구장비 정보",
+  "성과활용 통계",
+  "과학문화 자료",
+  "디지털 혁신",
+  "AI 연구개발",
+  "소프트웨어 기술",
+  "정보통신 연구",
+  "기술이전 현황",
+  "산학연 협력",
+  "지역 과학기술",
+  "연구개발 과제",
+  "국제 공동연구",
+  "기술예측 조사",
+  "과학기술 논문",
+  "특허 성과",
+  "연구윤리",
+  "데이터 기반 연구",
+  "융합연구",
+  "과학기술 표준",
+  "기술규제",
+  "미래유망기술",
+  "연구보안",
+  "성과평가",
+  "연구개발 예산",
+  "실증사업",
+  "공공기술 활용",
+  "혁신성장 자료",
+];
+
+const guideSteps: GuideStep[] = [
+  {
+    id: "kind",
+    badge: "1",
+    label: "유형",
+    title: "유형 선택",
+    body: [
+      "전체 유형 셀렉트 박스를 클릭해 제공 유형 목록을 엽니다.",
+      "목록에서 API/파일데이터를 선택하는 모션과 실제 값 변경을 함께 보여줍니다.",
+      "API/파일데이터 유형으로 바뀌면 중앙 데이터 수가 903건 기준으로 갱신됩니다.",
+    ],
+    targetSelectors: [".condition-select select"],
+    clickPoint: { x: 0.68, y: 0.5 },
+    panelSide: "right",
+  },
+  {
+    id: "org",
+    badge: "2",
+    label: "기관",
+    title: "기관 선택",
+    body: [
+      "전체 기관 버튼을 클릭해 기관 목록을 엽니다.",
+      "기관 목록을 스크롤한 뒤 과학기술정보통신부 체크박스에 체크합니다.",
+      "과학기술정보통신부 데이터만 지도와 목록에 남습니다.",
+    ],
+    targetSelectors: [".org-filter-option.guide-org-choice", ".org-filter-menu", ".org-filter-trigger"],
+    clickPoint: { x: 0.55, y: 0.5 },
+    panelSide: "bottom",
+  },
+  {
+    id: "mapSearch",
+    badge: "3",
+    label: "검색",
+    title: "데이터맵 검색",
+    body: [
+      "데이터맵 검색창에 기술이 한 글자씩 입력됩니다.",
+      "입력이 끝나면 검색 버튼까지 선택되며 기술 검색이 적용됩니다.",
+      "검색 결과는 실제 데이터맵과 같은 노드와 목록으로 갱신됩니다.",
+    ],
+    targetSelectors: [".global-search-group"],
+    clickPoint: { x: 0.44, y: 0.5 },
+    panelSide: "bottom",
+  },
+  {
+    id: "detailSearch",
+    badge: "4",
+    label: "내검색",
+    title: "결과 내 검색",
+    body: [
+      "결과 내 검색창에는 데이터가 한 글자씩 입력됩니다.",
+      "이 검색은 현재 오른쪽 목록 안에서만 다시 찾습니다.",
+      "목록이 길 때 데이터명이나 키워드 일부를 넣어 항목을 빠르게 찾습니다.",
+    ],
+    targetSelectors: [".result-search input", ".result-search"],
+    clickPoint: { x: 0.32, y: 0.5 },
+    panelSide: "bottom",
+  },
+  {
+    id: "keyword",
+    badge: "5",
+    label: "키워드",
+    title: "과학기술연구 키워드 클릭",
+    body: [
+      "상단 추천 키워드에서 과학기술연구를 선택합니다.",
+      "키워드는 다운로드와 활용신청이 많은 데이터에서 뽑아 보여줍니다.",
+      "과학기술연구를 누르면 검색어가 적용되고 관련 데이터맵으로 전환됩니다.",
+    ],
+    targetSelectors: [".keyword-pager button.active", ".keyword-row"],
+    clickPoint: { x: 0.55, y: 0.5 },
+    panelSide: "bottom",
+  },
+  {
+    id: "controls",
+    badge: "6",
+    label: "조작",
+    title: "화면 조작 버튼",
+    body: [
+      "전체 노드 펼치기, 확대, 축소, 초기화 버튼을 순서대로 소개합니다.",
+      "각 버튼을 누르지는 않고, 어떤 기능인지 하나씩 가리켜 보여줍니다.",
+      "전체 노드 버튼은 한 번 더 누르면 기본 화면 노드만 보이도록 접힙니다.",
+    ],
+    targetSelectors: [".canvas-map-controls .fit-view-button", ".canvas-map-controls"],
+    clickPoint: { x: 0.5, y: 0.2 },
+    panelSide: "right",
+    substeps: [
+      {
+        label: "전체 노드",
+        targetSelectors: [".canvas-map-controls .fit-view-button"],
+        clickPoint: { x: 0.5, y: 0.5 },
+      },
+      {
+        label: "확대",
+        targetSelectors: [".canvas-map-controls button:nth-child(2)"],
+        clickPoint: { x: 0.5, y: 0.5 },
+      },
+      {
+        label: "축소",
+        targetSelectors: [".canvas-map-controls button:nth-child(3)"],
+        clickPoint: { x: 0.5, y: 0.5 },
+      },
+      {
+        label: "초기화",
+        targetSelectors: [".canvas-map-controls button:nth-child(4)"],
+        clickPoint: { x: 0.5, y: 0.5 },
+      },
+    ],
+  },
+  {
+    id: "level1Node",
+    badge: "7",
+    label: "1차노드",
+    title: "1차 분류 노드 클릭",
+    body: [
+      "중앙 주변의 1차 분류 노드를 클릭해 큰 분류를 선택합니다.",
+      "선택한 분류의 하위 노드가 펼쳐지고 오른쪽 목록도 함께 갱신됩니다.",
+      "노드 색상과 연결선으로 현재 선택된 분류 위치를 확인합니다.",
+    ],
+    targetSelectors: [".d3-node.level1:not(.empty)", ".network-shell"],
+    clickPoint: { x: 0.5, y: 0.5 },
+    panelSide: "left",
+  },
+  {
+    id: "level2Node",
+    badge: "8",
+    label: "2차노드",
+    title: "2차 분류 노드 클릭",
+    body: [
+      "1차 분류 아래에 열린 2차 노드를 클릭합니다.",
+      "선택한 세부 분류 기준으로 데이터 점과 목록이 다시 좁혀집니다.",
+      "선택한 2차 분류에 연결된 하위 데이터 노드가 모두 보이도록 펼쳐집니다.",
+    ],
+    targetSelectors: [".d3-node.level2.active", ".d3-node.level2", ".network-shell"],
+    clickPoint: { x: 0.5, y: 0.5 },
+    panelSide: "left",
+  },
+  {
+    id: "dataList",
+    badge: "9",
+    label: "목록",
+    title: "데이터 목록 클릭",
+    body: [
+      "오른쪽 데이터 목록에서 원하는 항목 버튼을 클릭합니다.",
+      "목록에는 파일, API, API/파일 유형 배지가 함께 표시됩니다.",
+      "여성과학기술인력 데이터 항목을 누르는 모션 뒤 다음 단계에서 상세화면으로 전환됩니다.",
+    ],
+    targetSelectors: [".guide-list-click-target", ".dataset-list button", ".dataset-list-section", ".detail-panel"],
+    clickPoint: { x: 0.5, y: 0.5 },
+    panelSide: "left",
+  },
+  {
+    id: "portalLink",
+    badge: "10",
+    label: "바로가기",
+    title: "공공데이터 바로가기",
+    body: [
+      "상세화면 하단의 공공데이터포털 바로가기 버튼을 확인합니다.",
+      "이 버튼을 누르면 원문 상세 페이지로 이동해 다운로드와 활용신청을 진행할 수 있습니다.",
+      "모달에서는 이동 흐름만 보여주고 실제 새 창은 열지 않습니다.",
+    ],
+    targetSelectors: [".data-portal-link", ".record-table-view", ".detail-panel"],
+    clickPoint: { x: 0.5, y: 0.5 },
+    panelSide: "left",
+  },
+];
+
+const emptyGuideRect: GuideTargetRect = {
+  left: 24,
+  top: 120,
+  width: 360,
+  height: 220,
+};
+
+function clampNumber(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function findGuideTarget(selectors: string[], root?: HTMLElement | null): GuideTargetRect {
+  for (const selector of selectors) {
+    const element = root?.querySelector<Element>(selector) ?? document.querySelector<Element>(selector);
+    if (!element) continue;
+
+    const style = window.getComputedStyle(element);
+    const rect = element.getBoundingClientRect();
+    if (style.display === "none" || style.visibility === "hidden" || rect.width <= 0 || rect.height <= 0) {
+      continue;
+    }
+
+    return {
+      left: rect.left,
+      top: rect.top,
+      width: rect.width,
+      height: rect.height,
+    };
+  }
+
+  const fallback = root?.querySelector<HTMLElement>(".network-shell") ?? document.querySelector<HTMLElement>(".network-shell");
+  if (!fallback) return emptyGuideRect;
+
+  const rect = fallback.getBoundingClientRect();
+  return {
+    left: rect.left,
+    top: rect.top,
+    width: rect.width,
+    height: rect.height,
+  };
+}
+
+function guideStepIndexOf(id: GuideStep["id"]) {
+  return guideSteps.findIndex((item) => item.id === id);
+}
+
+function GuideDataMapPreview({
+  crawledAt,
+  datasets,
+  detailQuery,
+  mapQuery,
+  stepIndex,
+}: {
+  crawledAt: string;
+  datasets: DatasetRecord[];
+  detailQuery: string;
+  mapQuery: string;
+  stepIndex: number;
+}) {
+  const step = guideSteps[stepIndex] ?? guideSteps[0];
+  const hasKind = stepIndex >= guideStepIndexOf("kind");
+  const hasOrg = stepIndex >= guideStepIndexOf("org");
+  const hasMapSearch = stepIndex >= guideStepIndexOf("mapSearch");
+  const hasDetailSearch = stepIndex >= guideStepIndexOf("detailSearch");
+  const hasKeyword = stepIndex >= guideStepIndexOf("keyword");
+  const hasLevel1 = stepIndex >= guideStepIndexOf("level1Node");
+  const hasLevel2 = stepIndex >= guideStepIndexOf("level2Node");
+  const hasListClick = stepIndex >= guideStepIndexOf("dataList");
+  const hasPortal = stepIndex >= guideStepIndexOf("portalLink");
+  const sortKey: SortKey = "views";
+  const activeKind: KindFilter = hasKind ? guideFixedKind : "all";
+  const selectedOrgs = hasOrg ? [guideFixedOrg] : [];
+  const previewQuery = hasKeyword ? guideKeywordTerm : hasMapSearch ? mapQuery : "";
+  const previewDetailQuery = hasDetailSearch ? detailQuery : "";
+  const selectedTheme: string = previewQuery.trim() && (hasDetailSearch || hasKeyword || hasLevel1 || hasLevel2 || hasListClick || hasPortal)
+    ? "과학기술"
+    : "";
+  const selectedCategoryLevel2: string = selectedTheme && (hasDetailSearch || hasKeyword || hasLevel2 || hasListClick || hasPortal)
+    ? "과학기술진흥"
+    : "";
+  const detailsOpen = Boolean(selectedTheme || selectedCategoryLevel2 || previewDetailQuery || hasListClick || hasPortal);
+  const showRecordDetail = hasPortal;
+  const graphRevealLimit = selectedCategoryLevel2 ? 5000 : 50;
+  const orgSelectionLabel =
+    selectedOrgs.length === 0
+      ? "전체 기관"
+      : selectedOrgs.length === 1
+        ? selectedOrgs[0]
+        : `${selectedOrgs[0]} 외 ${formatNumber(selectedOrgs.length - 1)}`;
+
+  const baseRecords = useMemo(() => {
+    return datasets.filter((record) => {
+      const kindMatch = matchesKindFilter(record, activeKind);
+      const orgMatch = selectedOrgs.length === 0 || selectedOrgs.includes(record.제공기관);
+      return kindMatch && orgMatch && matchesDataMapSearch(record, previewQuery);
+    });
+  }, [activeKind, datasets, previewQuery, selectedOrgs]);
+
+  const catalogSummary = useMemo(() => summarizeCatalog(datasets), [datasets]);
+  const themeOrder = useMemo(
+    () => catalogSummary.byTheme.map((item) => item.name),
+    [catalogSummary.byTheme],
+  );
+  const level1KiTaSet = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const record of datasets) {
+      const theme = level1Label(record);
+      counts.set(theme, (counts.get(theme) ?? 0) + 1);
+    }
+    return new Set([...counts.entries()].filter(([, count]) => count < 10).map(([theme]) => theme));
+  }, [datasets]);
+
+  const themeStats = useMemo<ThemeStat[]>(() => {
+    const stats: ThemeStat[] = [];
+    for (const [index, theme] of themeOrder.entries()) {
+      if (level1KiTaSet.has(theme)) continue;
+      const records = baseRecords.filter((record) => level1Label(record) === theme);
+      stats.push({ theme, ...summarizeRecords(records), color: palette[index % palette.length] });
+    }
+
+    if (level1KiTaSet.size > 0) {
+      const kiTaRecords = baseRecords.filter((record) => level1KiTaSet.has(level1Label(record)));
+      stats.push({
+        theme: "기타",
+        ...summarizeRecords(kiTaRecords),
+        color: palette[stats.length % palette.length],
+      });
+    }
+
+    return stats;
+  }, [baseRecords, level1KiTaSet, themeOrder]);
+
+  const selectedScopeRecords = useMemo(() => {
+    if (!selectedTheme) return baseRecords;
+    return baseRecords.filter((record) => {
+      const l1 = level1Label(record);
+      if (selectedTheme === "기타") {
+        if (!level1KiTaSet.has(l1)) return false;
+        return !selectedCategoryLevel2 || l1 === selectedCategoryLevel2;
+      }
+      if (l1 !== selectedTheme) return false;
+      if (!selectedCategoryLevel2) return true;
+      return level2Label(record) === selectedCategoryLevel2;
+    });
+  }, [baseRecords, level1KiTaSet, selectedCategoryLevel2, selectedTheme]);
+
+  const selectedRecords = useMemo(
+    () => [...selectedScopeRecords].sort(compareRecords(sortKey)),
+    [selectedScopeRecords, sortKey],
+  );
+  const detailRecords = useMemo(
+    () => selectedRecords.filter((record) => matchesDetailSearch(record, previewDetailQuery)),
+    [previewDetailQuery, selectedRecords],
+  );
+  const datasetPageSize = 10;
+  const datasetPageCount = Math.max(Math.ceil(detailRecords.length / datasetPageSize), 1);
+  const currentDatasetPage = 0;
+  const visibleDetailRecords = detailRecords.slice(0, datasetPageSize);
+  const visibleDatasetPages = Array.from(
+    { length: Math.min(5, datasetPageCount) },
+    (_, index) => index,
+  );
+  const currentScopeSummary = useMemo(() => summarizeRecords(detailRecords), [detailRecords]);
+  const visibleTotals = useMemo(
+    () => ({
+      total: baseRecords.length,
+      files: baseRecords.filter((record) => record.kind === "file").length,
+      apis: baseRecords.filter((record) => record.kind === "api").length,
+      hybrids: baseRecords.filter((record) => record.kind === "hybrid").length,
+    }),
+    [baseRecords],
+  );
+  const keywordSourceRecords = useMemo(() => {
+    return datasets.filter((record) => {
+      const kindMatch = matchesKindFilter(record, activeKind);
+      const orgMatch = selectedOrgs.length === 0 || selectedOrgs.includes(record.제공기관);
+      return kindMatch && orgMatch;
+    });
+  }, [activeKind, datasets, selectedOrgs]);
+  const keywordOptions = useMemo(() => {
+    const options = topKeywordsFromPopularRecords(keywordSourceRecords, 20);
+    return [guideKeywordTerm, ...options.filter((keyword) => keyword !== guideKeywordTerm)].slice(0, 20);
+  }, [keywordSourceRecords]);
+  const selectedColor = selectedTheme
+    ? (themeStats.find((stat) => stat.theme === selectedTheme)?.color ?? palette[0])
+    : palette[0];
+  const selectedRecord =
+    detailRecords.find((record) => record.name.includes("여성과학기술인력_공공연구기관 직급별 승진현황")) ??
+    detailRecords[0] ??
+    selectedRecords[0] ??
+    baseRecords[0];
+  const selectedRecordRows = showRecordDetail && selectedRecord ? recordInfoRows(selectedRecord) : [];
+  const selectedRecordIndex = selectedRecord
+    ? detailRecords.findIndex((record) => record.id === selectedRecord.id)
+    : -1;
+  const detailResultLabel = detailRecords.length
+    ? `${formatNumber(Math.max(selectedRecordIndex, 0) + 1)}/${formatNumber(detailRecords.length)}`
+    : "0/0";
+
+  const graphData = useMemo<{
+    center: GraphItem;
+    items: GraphItem[];
+  }>(() => {
+    const center: GraphItem = {
+      id: "__center",
+      kind: "center",
+      label: previewQuery.trim() || "데이터현황",
+      countLabel: formatNumber(visibleTotals.total),
+      color: centerNodeColor,
+      radius: 72,
+      tooltip: [
+        previewQuery.trim() || "데이터현황",
+        `데이터 ${formatNumber(visibleTotals.total)}건`,
+        `파일 ${formatNumber(visibleTotals.files)} · API ${formatNumber(visibleTotals.apis)} · API/파일 ${formatNumber(visibleTotals.hybrids)}`,
+      ].join("\n"),
+    };
+    const level1Items: GraphItem[] = themeStats.map((stat) => ({
+      id: level1NodeId(stat.theme),
+      kind: "level1",
+      label: stat.theme,
+      countLabel: stat.count ? formatNumber(stat.count) : "-",
+      color: stat.color,
+      radius: branchNodeRadius,
+      tooltip: summaryTooltip(stat.theme, stat),
+      isEmpty: stat.count === 0,
+      theme: stat.theme,
+    }));
+    const items = [...level1Items];
+
+    if (selectedTheme) {
+      const level1Records =
+        selectedTheme === "기타"
+          ? baseRecords.filter((record) => level1KiTaSet.has(level1Label(record)))
+          : baseRecords.filter((record) => level1Label(record) === selectedTheme);
+      const themeIndex = Math.max(themeOrder.indexOf(selectedTheme), 0);
+      const rawGroups = new Map<string, DatasetRecord[]>();
+
+      for (const record of level1Records) {
+        const category = selectedTheme === "기타" ? level1Label(record) : level2Label(record);
+        const group = rawGroups.get(category) ?? [];
+        group.push(record);
+        rawGroups.set(category, group);
+      }
+
+      const categoryColorMap = new Map<string, string>();
+      const sortedGroups = [...rawGroups.entries()].sort(([, a], [, b]) => b.length - a.length);
+      const visibleGroups = sortedGroups.slice(0, graphRevealLimit);
+      const hiddenGroupCount = Math.max(sortedGroups.length - graphRevealLimit, 0);
+
+      items.push(
+        ...visibleGroups.map<GraphItem>(([category, recordsInGroup], index) => {
+          const color = palette[(themeIndex + index + 1) % palette.length];
+          categoryColorMap.set(category, color);
+          const summary = summarizeRecords(recordsInGroup);
+          return {
+            id: level2NodeId(selectedTheme, category),
+            kind: "level2",
+            label: category,
+            countLabel: formatNumber(recordsInGroup.length),
+            color,
+            radius: level2NodeRadius,
+            tooltip: summaryTooltip(`${selectedTheme} > ${category}`, summary),
+            parentId: level1NodeId(selectedTheme),
+            theme: selectedTheme,
+            categoryLevel2: category,
+          };
+        }),
+      );
+
+      if (hiddenGroupCount > 0) {
+        items.push({
+          id: `overflow-${level1NodeId(selectedTheme)}`,
+          kind: "overflow",
+          label: "더보기",
+          countLabel: `+${formatNumber(hiddenGroupCount)}`,
+          color: selectedColor,
+          radius: level2NodeRadius,
+          tooltip: `${selectedTheme}\n더보기를 누르면 10개씩 추가 표시합니다.`,
+          parentId: level1NodeId(selectedTheme),
+          theme: selectedTheme,
+        });
+      }
+
+      if (selectedCategoryLevel2) {
+        const categoryRecords = [...(rawGroups.get(selectedCategoryLevel2) ?? [])].sort(
+          compareRecords(sortKey),
+        );
+        const hasOverflow = categoryRecords.length > graphRevealLimit;
+        const dotsToShow = hasOverflow ? categoryRecords.slice(0, graphRevealLimit) : categoryRecords;
+        const dotColor =
+          categoryColorMap.get(selectedCategoryLevel2) ?? palette[themeIndex % palette.length];
+
+        items.push(
+          ...dotsToShow.map<GraphItem>((record) => ({
+            id: `record-${record.id}`,
+            kind: "record",
+            label: record.name,
+            countLabel: record.kind === "file" ? record.확장자 || "FILE" : kindBadgeLabel(record),
+            color: dotColor,
+            radius: recordDotRadius,
+            tooltip: recordTooltip(record),
+            parentId: level2NodeId(selectedTheme, selectedCategoryLevel2),
+            theme: selectedTheme,
+            categoryLevel2: selectedCategoryLevel2,
+            recordId: record.id,
+          })),
+        );
+
+        if (hasOverflow) {
+          items.push({
+            id: `overflow-${level2NodeId(selectedTheme, selectedCategoryLevel2)}`,
+            kind: "overflow",
+            label: "더보기",
+            countLabel: `+${formatNumber(categoryRecords.length - graphRevealLimit)}`,
+            color: dotColor,
+            radius: recordDotRadius + 7,
+            tooltip: `${selectedCategoryLevel2}\n더보기를 누르면 10개씩 추가 표시합니다.`,
+            parentId: level2NodeId(selectedTheme, selectedCategoryLevel2),
+            theme: selectedTheme,
+            categoryLevel2: selectedCategoryLevel2,
+          });
+        }
+      }
+    }
+
+    return { center, items };
+  }, [
+    baseRecords,
+    graphRevealLimit,
+    level1KiTaSet,
+    previewQuery,
+    selectedCategoryLevel2,
+    selectedColor,
+    selectedTheme,
+    sortKey,
+    themeOrder,
+    themeStats,
+    visibleTotals.apis,
+    visibleTotals.files,
+    visibleTotals.hybrids,
+    visibleTotals.total,
+  ]);
+
+  const nodeColorMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const item of graphData.items) {
+      if (item.kind === "level1" && item.theme) map.set(item.theme, item.color);
+      if (item.kind === "level2" && item.categoryLevel2) map.set(item.categoryLevel2, item.color);
+    }
+    return map;
+  }, [graphData.items]);
+  const selectedGraphNodeId = step.id === "portalLink" && selectedRecord
+    ? `record-${selectedRecord.id}`
+    : step.id === "level1Node" && selectedTheme
+      ? level1NodeId(selectedTheme)
+      : selectedCategoryLevel2 && selectedTheme && (hasDetailSearch || hasKeyword || hasLevel2 || hasListClick)
+      ? level2NodeId(selectedTheme, selectedCategoryLevel2)
+      : selectedTheme && (hasLevel1 || hasDetailSearch || hasKeyword)
+        ? level1NodeId(selectedTheme)
+        : "";
+  const handlePreviewNodeClick = useCallback(() => undefined, []);
+  const registerPreviewControls = useCallback(() => undefined, []);
+  const orgOptions = useMemo(() => {
+    const options = [...new Set(datasets.map((record) => record.제공기관).filter(Boolean))]
+      .sort((a, b) => a.localeCompare(b, "ko-KR"));
+    return [guideFixedOrg, ...options.filter((org) => org !== guideFixedOrg)].slice(0, 9);
+  }, [datasets]);
+
+  return (
+    <section className="guide-preview-map" aria-label="실제 데이터맵 축소 화면">
+      <header className="map-header guide-preview-header">
+        <div className="brand-area">
+          <span className="brand-mark" aria-hidden="true">
+            <img src="/favicon.svg" alt="" />
+          </span>
+          <div>
+            <h2>과학기술정보통신부 데이터맵</h2>
+          </div>
+        </div>
+        <section className="search-panel" aria-label="가이드 데이터 검색">
+          <div className="search-row">
+            <label className="condition-select">
+              <span>데이터유형</span>
+              <select value={activeKind} onChange={() => undefined}>
+                <option value="all">전체 유형</option>
+                <option value="api">API</option>
+                <option value="file">파일데이터</option>
+                <option value="hybrid">API/파일데이터</option>
+              </select>
+            </label>
+            <div className="org-filter">
+              <button
+                aria-expanded={step.id === "org"}
+                aria-haspopup="listbox"
+                className="org-filter-trigger"
+                title={orgSelectionLabel}
+                type="button"
+              >
+                <span>{orgSelectionLabel}</span>
+                <Icon name={step.id === "org" ? "chevronUp" : "chevronDown"} size={16} />
+              </button>
+              {step.id === "org" ? (
+                <div className="org-filter-menu" role="listbox" aria-label="기관 선택">
+                  <label className="org-filter-option">
+                    <input type="checkbox" checked={!hasOrg} readOnly />
+                    <span>전체 기관</span>
+                  </label>
+                  {orgOptions.map((org) => (
+                    <label
+                      className={`org-filter-option${org === guideFixedOrg ? " guide-org-choice" : ""}`}
+                      key={org}
+                    >
+                      <input type="checkbox" checked={hasOrg && org === guideFixedOrg} readOnly />
+                      <span title={org}>{org}</span>
+                    </label>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+            <div className="global-search-group">
+              <label className="global-search">
+                <span>데이터맵 검색</span>
+                <input value={previewQuery} readOnly placeholder="데이터맵 검색" />
+              </label>
+              <button className="search-submit" type="button" aria-label="검색">
+                <Icon name="search" size={18} />
+              </button>
+            </div>
+            <label className="result-search">
+              <span>결과 내 검색</span>
+              <input value={previewDetailQuery} readOnly placeholder="결과 내 검색" />
+              <span className="result-count">{detailResultLabel}</span>
+              <button type="button" aria-label="이전 결과">
+                <Icon name="chevronUp" size={16} />
+              </button>
+              <button type="button" aria-label="다음 결과">
+                <Icon name="chevronDown" size={16} />
+              </button>
+              <button type="button" aria-label="결과 내 검색 지우기">
+                <Icon name="x" size={15} />
+              </button>
+            </label>
+            <div className="keyword-row" aria-label="추천 키워드">
+              <button type="button" aria-label="이전 키워드">
+                <Icon name="chevronLeft" size={15} />
+              </button>
+              <div className="keyword-pager">
+                {keywordOptions.map((keyword) => (
+                  <button className={previewQuery === keyword ? "active" : ""} key={keyword} type="button">
+                    {keyword}
+                  </button>
+                ))}
+              </div>
+              <button type="button" aria-label="다음 키워드">
+                <Icon name="chevronRight" size={15} />
+              </button>
+            </div>
+          </div>
+        </section>
+      </header>
+
+      <section className={`map-workspace guide-preview-workspace${detailsOpen ? " with-detail" : ""}`}>
+        <section className="network-shell" aria-label="공공데이터 네트워크 맵">
+          <div className="network-toolbar">
+            <button className="canvas-help-button" type="button" aria-label="가이드">
+              <Icon name="help" size={17} />
+            </button>
+          </div>
+          <NetworkGraph
+            center={graphData.center}
+            items={graphData.items}
+            labelHighlightTerm={previewQuery}
+            onNodeClick={handlePreviewNodeClick}
+            registerControls={registerPreviewControls}
+            selectedNodeId={selectedGraphNodeId}
+            recordAngleStepPx={hasKeyword ? 9 : 11}
+          />
+          <div className="canvas-map-controls" aria-label="지도 확대 축소">
+            <button className="fit-view-button" type="button" aria-label="전체 노드 펼치기">
+              <Icon name="fitView" size={18} />
+            </button>
+            <button type="button" aria-label="확대">
+              <Icon name="plus" size={18} />
+            </button>
+            <button type="button" aria-label="축소">
+              <Icon name="minus" size={18} />
+            </button>
+            <button type="button" aria-label="검색 조건 초기화">
+              <Icon name="rotateCcw" size={17} />
+            </button>
+          </div>
+        </section>
+
+        {detailsOpen ? (
+          <aside className={`detail-panel ${showRecordDetail ? "record-mode" : "list-mode"}`}>
+            <div className="panel-title">
+              <strong>{showRecordDetail && selectedRecord ? selectedRecord.name : "데이터 목록"}</strong>
+              <div className="panel-actions">
+                {showRecordDetail ? (
+                  <button type="button" aria-label="데이터 목록으로 돌아가기">
+                    <Icon name="chevronLeft" size={17} />
+                  </button>
+                ) : null}
+                <button type="button" aria-label="닫기">
+                  <Icon name="x" size={17} />
+                </button>
+              </div>
+            </div>
+
+            <div className="detail-content" style={{ "--node-color": selectedColor } as CSSProperties}>
+              {showRecordDetail && selectedRecord ? (
+                <section className="record-table-view">
+                  <table className="record-info-table">
+                    <tbody>
+                      {selectedRecordRows.map((row) => (
+                        <tr key={row.label}>
+                          <th scope="row">{row.label}</th>
+                          <td>{highlightSearchTerm(row.value, previewDetailQuery)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <button className="data-portal-link" type="button">
+                    공공데이터 바로가기
+                  </button>
+                </section>
+              ) : (
+                <section className="dataset-list-section">
+                  {detailRecords.length ? (
+                    <>
+                      <div className="dataset-list-summary">
+                        <span>데이터 {formatNumber(currentScopeSummary.count)}</span>
+                        <span>파일 {formatNumber(currentScopeSummary.files)}</span>
+                        <span>API {formatNumber(currentScopeSummary.apis)}</span>
+                        <span>API/파일 {formatNumber(currentScopeSummary.hybrids)}</span>
+                      </div>
+                      <ol className="dataset-list">
+                        {visibleDetailRecords.map((record, index) => (
+                          <li key={record.id}>
+                            <button
+                              className={record.id === selectedRecord?.id ? "guide-list-click-target" : ""}
+                              type="button"
+                            >
+                              <span className="dataset-index">
+                                {formatNumber(currentDatasetPage * datasetPageSize + index + 1)}
+                              </span>
+                              <span
+                                className="dataset-dot"
+                                style={
+                                  {
+                                    "--item-color":
+                                      nodeColorMap.get(selectedCategoryLevel2) ??
+                                      nodeColorMap.get(level1Label(record)) ??
+                                      kindColor(record),
+                                  } as CSSProperties
+                                }
+                                aria-hidden="true"
+                              />
+                              <span className="dataset-name">
+                                {highlightSearchTerm(record.name, previewDetailQuery)}
+                              </span>
+                              <span className={`dataset-kind-badge ${record.kind}`}>
+                                {kindBadgeLabel(record)}
+                              </span>
+                            </button>
+                          </li>
+                        ))}
+                      </ol>
+                      <nav className="dataset-pagination" aria-label="데이터 목록 페이지">
+                        <button type="button" disabled aria-label="첫 페이지">
+                          <Icon name="chevronsLeft" size={15} />
+                        </button>
+                        <button type="button" disabled aria-label="이전 페이지">
+                          <Icon name="chevronLeft" size={15} />
+                        </button>
+                        {visibleDatasetPages.map((page) => (
+                          <button
+                            className={page === currentDatasetPage ? "active" : ""}
+                            key={page}
+                            type="button"
+                            aria-label={`${formatNumber(page + 1)} 페이지`}
+                          >
+                            {formatNumber(page + 1)}
+                          </button>
+                        ))}
+                        <button type="button" disabled={datasetPageCount <= 1} aria-label="다음 페이지">
+                          <Icon name="chevronRight" size={15} />
+                        </button>
+                        <button type="button" disabled={datasetPageCount <= 1} aria-label="마지막 페이지">
+                          <Icon name="chevronsRight" size={15} />
+                        </button>
+                      </nav>
+                    </>
+                  ) : (
+                    <div className="empty-state">조건에 맞는 데이터가 없습니다.</div>
+                  )}
+                </section>
+              )}
+            </div>
+          </aside>
+        ) : null}
+      </section>
+
+      <footer className="map-footer">
+        <span>
+          과학기술정보통신부 · {crawledAt ? new Date(crawledAt).toLocaleDateString("ko-KR") : "-"} 기준
+        </span>
+        <span>
+          현재 표시 {formatNumber(visibleTotals.total)}건 · 파일 {formatNumber(visibleTotals.files)} · API{" "}
+          {formatNumber(visibleTotals.apis)} · API/파일 {formatNumber(visibleTotals.hybrids)}
+        </span>
+      </footer>
+    </section>
+  );
+}
+
+function GuideTour({
+  open,
+  onClose,
+  onStepChange,
+  stepIndex,
+  steps,
+  crawledAt,
+  datasets,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onStepChange: (stepIndex: number) => void;
+  stepIndex: number;
+  steps: GuideStep[];
+  crawledAt: string;
+  datasets: DatasetRecord[];
+}) {
+  const [typedText, setTypedText] = useState("");
+  const [demoMapTypedText, setDemoMapTypedText] = useState("");
+  const [demoDetailTypedText, setDemoDetailTypedText] = useState("");
+  const [targetRect, setTargetRect] = useState<GuideTargetRect>(emptyGuideRect);
+  const [subStepIndex, setSubStepIndex] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
+  const modalRef = useRef<HTMLDivElement | null>(null);
+  const step = steps[stepIndex] ?? steps[0];
+  const activeSubStep = step.substeps?.[subStepIndex % step.substeps.length];
+  const activeTargetSelectors = activeSubStep?.targetSelectors ?? step.targetSelectors;
+  const activeClickPoint = activeSubStep?.clickPoint ?? step.clickPoint;
+  const stepScript = step.body.join("\n");
+  const hasKind = stepIndex >= guideSteps.findIndex((item) => item.id === "kind");
+  const hasOrg = stepIndex >= guideSteps.findIndex((item) => item.id === "org");
+  const hasMapSearch = stepIndex >= guideSteps.findIndex((item) => item.id === "mapSearch");
+  const hasDetailSearch = stepIndex >= guideSteps.findIndex((item) => item.id === "detailSearch");
+  const hasKeyword = stepIndex >= guideSteps.findIndex((item) => item.id === "keyword");
+  const hasLevel1 = stepIndex >= guideSteps.findIndex((item) => item.id === "level1Node");
+  const hasLevel2 = stepIndex >= guideSteps.findIndex((item) => item.id === "level2Node");
+  const hasListClick = stepIndex >= guideSteps.findIndex((item) => item.id === "dataList");
+  const hasPortal = stepIndex >= guideSteps.findIndex((item) => item.id === "portalLink");
+  const hasGuideKindScope = hasKind && !hasOrg;
+  const hasGuideOrgScope = hasOrg && !hasMapSearch;
+  const hasGuideMapScope = hasMapSearch;
+  const showGuideLevel2 = hasMapSearch || hasDetailSearch || hasKeyword || hasLevel1 || hasLevel2 || hasListClick || hasPortal;
+  const showGuideRecords = showGuideLevel2;
+  const showGuideList = (hasDetailSearch || hasKeyword || hasLevel1 || hasLevel2 || hasListClick) && !hasPortal;
+  const showGuideRecordDetail = hasPortal;
+  const showGuideSidePanel = showGuideList || showGuideRecordDetail;
+  const guideScopeTotalLabel = hasGuideMapScope ? "27" : hasGuideOrgScope ? "52" : hasGuideKindScope ? "903" : "1,707";
+  const guideCenterLabel = hasGuideMapScope ? guideMapSearchTerm : "데이터현황";
+  const guideCenterLabelLines = guideCenterLabel === guideMapSearchTerm ? ["과학기술", "연구"] : [guideCenterLabel];
+  const guideResultCountLabel = hasPortal ? "22/27" : hasDetailSearch ? "1/27" : hasMapSearch ? "1/27" : hasOrg ? "1/52" : hasKind ? "1/903" : "1/1,707";
+  const guideCategoryCounts =
+    hasGuideMapScope
+      ? {
+          science: "27",
+          communication: "-",
+          other: "-",
+          welfare: "1",
+          administration: "-",
+          environment: "-",
+          education: "-",
+          industry: "-",
+          transport: "-",
+          health: "-",
+        }
+      : hasGuideOrgScope
+        ? {
+            science: "37",
+            communication: "8",
+            other: "2",
+            welfare: "1",
+            administration: "4",
+            environment: "-",
+            education: "-",
+            industry: "-",
+            transport: "-",
+            health: "-",
+          }
+        : hasGuideKindScope
+          ? {
+              science: "513",
+              communication: "115",
+              other: "9",
+              welfare: "9",
+              administration: "120",
+              environment: "3",
+              education: "90",
+              industry: "8",
+              transport: "19",
+              health: "17",
+            }
+          : {
+              science: "931",
+              communication: "275",
+              other: "16",
+              welfare: "10",
+              administration: "183",
+              environment: "28",
+              education: "155",
+              industry: "29",
+              transport: "35",
+              health: "45",
+            };
+  const guideNodeStateClass = (count: string) => (count === "-" ? " guide-empty-node" : "");
+  const demoKindLabel = hasKind ? "API/파일데이터" : "전체 유형";
+  const demoOrgLabel = hasOrg ? guideFixedOrg : "전체 기관";
+  const demoMapQuery = hasMapSearch ? demoMapTypedText : "";
+  const demoDetailQuery = hasPortal ? "데" : hasDetailSearch ? demoDetailTypedText : "";
+  const guideFanRecords = guideFanRecordLabels.slice(0, 27);
+  const guideCenterX = 430;
+  const guideCenterY = 470;
+  const guideScienceX = 430;
+  const guideScienceY = 315;
+  const guidePrimaryLevel2X = showGuideRecords ? 310 : 300;
+  const guidePrimaryLevel2Y = showGuideRecords ? 175 : 190;
+  const guideResearchX = showGuideRecords ? 450 : 430;
+  const guideResearchY = showGuideRecords ? 160 : 170;
+  const guideThirdLevel2X = showGuideRecords ? 590 : 560;
+  const guideThirdLevel2Y = showGuideRecords ? 175 : 190;
+
+  useEffect(() => {
+    setSubStepIndex(0);
+  }, [stepIndex]);
+
+  useEffect(() => {
+    if (open) setIsPaused(false);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    setTypedText("");
+    let index = 0;
+    const timer = window.setInterval(() => {
+      index += 1;
+      setTypedText(stepScript.slice(0, index));
+      if (index >= stepScript.length) {
+        window.clearInterval(timer);
+      }
+    }, 24);
+
+    return () => window.clearInterval(timer);
+  }, [open, stepScript]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const mapIndex = steps.findIndex((item) => item.id === "mapSearch");
+    if (stepIndex < mapIndex) {
+      setDemoMapTypedText("");
+      return;
+    }
+    if (step.id !== "mapSearch") {
+      setDemoMapTypedText(guideMapSearchTerm);
+      return;
+    }
+
+    setDemoMapTypedText("");
+    const letters = [...guideMapSearchTerm];
+    const timer = window.setInterval(() => {
+      setDemoMapTypedText((current) => {
+        const next = letters.slice(0, current.length + 1).join("");
+        if (next.length >= letters.length) window.clearInterval(timer);
+        return next;
+      });
+    }, 120);
+
+    return () => window.clearInterval(timer);
+  }, [open, step.id, stepIndex, steps]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const detailIndex = steps.findIndex((item) => item.id === "detailSearch");
+    if (stepIndex < detailIndex) {
+      setDemoDetailTypedText("");
+      return;
+    }
+    if (step.id !== "detailSearch") {
+      setDemoDetailTypedText(guideDetailSearchTerm);
+      return;
+    }
+
+    setDemoDetailTypedText("");
+    const letters = [...guideDetailSearchTerm];
+    const timer = window.setInterval(() => {
+      setDemoDetailTypedText((current) => {
+        const next = letters.slice(0, current.length + 1).join("");
+        if (next.length >= letters.length) window.clearInterval(timer);
+        return next;
+      });
+    }, 120);
+
+    return () => window.clearInterval(timer);
+  }, [open, step.id, stepIndex, steps]);
+
+  useEffect(() => {
+    if (!open || isPaused) return;
+
+    const timer = window.setTimeout(() => {
+      onStepChange(stepIndex + 1 >= steps.length ? stepIndex : stepIndex + 1);
+    }, 7200);
+
+    return () => window.clearTimeout(timer);
+  }, [isPaused, onStepChange, open, stepIndex, steps.length]);
+
+  useEffect(() => {
+    if (!open || isPaused || !step.substeps?.length || subStepIndex >= step.substeps.length - 1) return;
+
+    const timer = window.setInterval(() => {
+      setSubStepIndex((current) => Math.min(current + 1, step.substeps!.length - 1));
+    }, 1500);
+
+    return () => window.clearInterval(timer);
+  }, [isPaused, open, step.substeps, subStepIndex]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const updateTargetRect = () => {
+      setTargetRect(findGuideTarget(activeTargetSelectors, modalRef.current));
+    };
+
+    updateTargetRect();
+    const interval = window.setInterval(updateTargetRect, 450);
+    window.addEventListener("resize", updateTargetRect);
+    window.addEventListener("scroll", updateTargetRect, true);
+
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("resize", updateTargetRect);
+      window.removeEventListener("scroll", updateTargetRect, true);
+    };
+  }, [activeTargetSelectors, open]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose, open]);
+
+  if (!open) return null;
+
+  const moveStep = (nextIndex: number) => {
+    onStepChange((nextIndex + steps.length) % steps.length);
+  };
+
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  const cardWidth = Math.min(320, viewportWidth - 32);
+  const cardHeight = 190;
+  const targetCenterX = targetRect.left + targetRect.width * activeClickPoint.x;
+  const targetCenterY = targetRect.top + targetRect.height * activeClickPoint.y;
+  const panelGap = step.id === "kind" ? 84 : 26;
+  const modalBounds = modalRef.current?.getBoundingClientRect();
+  const boundaryLeft = modalBounds ? modalBounds.left + 12 : 16;
+  const boundaryTop = modalBounds ? modalBounds.top + 12 : 16;
+  const boundaryRight = modalBounds ? modalBounds.right - 12 : viewportWidth - 16;
+  const boundaryBottom = modalBounds ? modalBounds.bottom - 78 : viewportHeight - 16;
+  const spotlightStyle = {
+    left: targetRect.left - 8,
+    top: targetRect.top - 8,
+    width: targetRect.width + 16,
+    height: targetRect.height + 16,
+  } as CSSProperties;
+  const spotlightLeft = Math.max(0, targetRect.left - 8);
+  const spotlightTop = Math.max(0, targetRect.top - 8);
+  const spotlightRight = Math.min(viewportWidth, targetRect.left + targetRect.width + 8);
+  const spotlightBottom = Math.min(viewportHeight, targetRect.top + targetRect.height + 8);
+  const pointerStyle = {
+    left: targetCenterX,
+    top: targetCenterY,
+  } as CSSProperties;
+
+  let panelLeft =
+    step.panelSide === "left"
+      ? targetRect.left - cardWidth - panelGap
+      : step.panelSide === "right"
+        ? targetRect.left + targetRect.width + panelGap
+        : targetRect.left + targetRect.width / 2 - cardWidth / 2;
+  let panelTop =
+    step.panelSide === "top"
+      ? targetRect.top - cardHeight - panelGap
+      : step.panelSide === "bottom"
+        ? targetRect.top + targetRect.height + panelGap
+        : targetCenterY - cardHeight / 2;
+
+  if (panelLeft < boundaryLeft || panelLeft + cardWidth > boundaryRight) {
+    panelLeft = targetCenterX < (boundaryLeft + boundaryRight) / 2 ? boundaryRight - cardWidth : boundaryLeft;
+  }
+  panelLeft = clampNumber(panelLeft, boundaryLeft, Math.max(boundaryLeft, boundaryRight - cardWidth));
+
+  if (panelTop < boundaryTop || panelTop + cardHeight > boundaryBottom) {
+    panelTop = clampNumber(
+      targetCenterY - cardHeight / 2,
+      boundaryTop,
+      Math.max(boundaryTop, boundaryBottom - cardHeight),
+    );
+  }
+
+  const panelStyle = {
+    left: panelLeft,
+    top: panelTop,
+    width: cardWidth,
+  } as CSSProperties;
+  const selectPopoverStyle = {
+    left: spotlightLeft,
+    top: spotlightBottom + 8,
+    width: Math.max(180, Math.min(260, spotlightRight - spotlightLeft)),
+  } as CSSProperties;
+  const panelAnchorX = clampNumber(targetCenterX, panelLeft, panelLeft + cardWidth);
+  const panelAnchorY = clampNumber(targetCenterY, panelTop, panelTop + cardHeight);
+  const typedLines = typedText.split("\n").filter(Boolean);
+  const showClickMotion = step.id !== "controls";
+  const showConnector = step.id !== "dataList";
+  const guideProgressLabel = `${step.badge}/${steps.length}`;
+
+  return (
+    <div className="guide-tour-layer" role="dialog" aria-modal="true" aria-label="온라인 사용자 이용 메뉴얼">
+      <div className="guide-modal-shell" ref={modalRef}>
+        <div className="guide-modal-titlebar">
+          <strong>온라인 사용자 이용 메뉴얼</strong>
+          <button className="guide-icon-button" type="button" onClick={onClose} aria-label="메뉴얼 닫기">
+            <Icon name="x" size={18} />
+          </button>
+        </div>
+        <div className="guide-interface-modal">
+          <GuideDataMapPreview
+            crawledAt={crawledAt}
+            datasets={datasets}
+            detailQuery={demoDetailQuery}
+            mapQuery={demoMapQuery}
+            stepIndex={stepIndex}
+          />
+          <header className="map-header guide-sim-header">
+            <div className="brand-area guide-sim-brand">
+              <span className="brand-mark" aria-hidden="true">
+                <img src="/favicon.svg" alt="" />
+              </span>
+              <div>
+                <h2>과학기술정보통신부 데이터맵</h2>
+              </div>
+            </div>
+            <section className="search-panel" aria-label="가이드 데이터 검색">
+              <div className="search-row">
+                <label className="condition-select">
+                  <span>데이터유형</span>
+                  <select value={demoKindLabel} onChange={() => undefined}>
+                    <option>전체 유형</option>
+                    <option>API</option>
+                    <option>파일데이터</option>
+                    <option>API/파일데이터</option>
+                  </select>
+                </label>
+                <div className="org-filter">
+                  <button
+                    aria-expanded={step.id === "org"}
+                    aria-haspopup="listbox"
+                    className="org-filter-trigger"
+                    type="button"
+                    title={demoOrgLabel}
+                  >
+                    <span>{demoOrgLabel}</span>
+                    <Icon name={step.id === "org" ? "chevronUp" : "chevronDown"} size={16} />
+                  </button>
+                  {step.id === "org" ? (
+                    <div className="org-filter-menu" role="listbox" aria-label="기관 선택">
+                      {[
+                        guideFixedOrg,
+                        "광주과학기술원",
+                        "국가과학기술연구회",
+                        "국립과천과학관",
+                        "국립광주과학관",
+                        "국립부산과학관",
+                        "국립전파연구원",
+                        "국립중앙과학관",
+                      ].map((org) => (
+                        <label
+                          className={`org-filter-option${org === guideFixedOrg ? " guide-org-choice" : ""}`}
+                          key={org}
+                        >
+                          <input type="checkbox" checked={org === guideFixedOrg} readOnly />
+                          <span>{org}</span>
+                        </label>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+                <div className="global-search-group">
+                  <label className="global-search">
+                    <span>데이터맵 검색</span>
+                    <input value={demoMapQuery} readOnly placeholder="데이터맵 검색" />
+                  </label>
+                  <button className="search-submit" type="button" aria-label="검색">
+                    <Icon name="search" size={18} />
+                  </button>
+                </div>
+                <label className="result-search">
+                  <span>결과 내 검색</span>
+                  <input value={demoDetailQuery} readOnly placeholder="결과 내 검색" />
+                  <span className="result-count">{guideResultCountLabel}</span>
+                  <button type="button" aria-label="이전 결과">
+                    <Icon name="chevronUp" size={16} />
+                  </button>
+                  <button type="button" aria-label="다음 결과">
+                    <Icon name="chevronDown" size={16} />
+                  </button>
+                  <button type="button" aria-label="결과 내 검색 지우기">
+                    <Icon name="x" size={15} />
+                  </button>
+                </label>
+                <div className="keyword-row" aria-label="추천 키워드">
+                  <button type="button" aria-label="이전 키워드">
+                    <Icon name="chevronLeft" size={15} />
+                  </button>
+                  <div className="keyword-pager">
+                    {["기술통계", guideKeywordTerm, "연구개발", "디지털", "정보통신"].map((keyword) => (
+                      <button className={keyword === guideKeywordTerm && hasKeyword ? "active" : ""} key={keyword} type="button">
+                        {keyword}
+                      </button>
+                    ))}
+                  </div>
+                  <button type="button" aria-label="다음 키워드">
+                    <Icon name="chevronRight" size={15} />
+                  </button>
+                </div>
+              </div>
+            </section>
+          </header>
+
+          <section className={`map-workspace guide-sim-workspace${showGuideSidePanel ? " with-detail" : " full-map"}`}>
+            <section className="network-shell" aria-label="가이드 네트워크 맵">
+              <div className="network-toolbar">
+                <button className="canvas-help-button" type="button" aria-label="가이드">
+                  <Icon name="help" size={17} />
+                </button>
+              </div>
+              <div className="canvas-map-controls" aria-label="지도 확대 축소">
+                <button className="fit-view-button" type="button" aria-label="전체 노드 펼치기">
+                  <Icon name="fitView" size={18} />
+                </button>
+                <button type="button" aria-label="확대">
+                  <Icon name="plus" size={18} />
+                </button>
+                <button type="button" aria-label="축소">
+                  <Icon name="minus" size={18} />
+                </button>
+                <button type="button" aria-label="검색 조건 초기화">
+                  <Icon name="rotateCcw" size={17} />
+                </button>
+              </div>
+              <div className={`guide-sim-graph${hasMapSearch ? " searched" : ""}`}>
+                <svg
+                  className="guide-sim-svg"
+                  viewBox={showGuideRecords ? "40 0 800 700" : "180 230 500 500"}
+                  preserveAspectRatio="xMidYMid meet"
+                  role="img"
+                  aria-label="데이터맵 가이드 미리보기"
+                >
+                  <g
+                    className={`guide-sim-graph-stage${showGuideRecords ? " expanded" : ""}`}
+                    transform={showGuideRecords ? "translate(42 112) scale(0.78)" : undefined}
+                  >
+                  <g className="guide-svg-links">
+                    <line className="visible" x1={guideCenterX} y1={guideCenterY} x2={guideScienceX} y2={guideScienceY} />
+                    <line className="visible" x1={guideCenterX} y1={guideCenterY} x2="300" y2="360" />
+                    <line className="visible" x1={guideCenterX} y1={guideCenterY} x2="560" y2="360" />
+                    <line className="visible" x1={guideCenterX} y1={guideCenterY} x2="240" y2="455" />
+                    <line className="visible" x1={guideCenterX} y1={guideCenterY} x2="620" y2="455" />
+                    <line className="visible" x1={guideCenterX} y1={guideCenterY} x2="260" y2="555" />
+                    <line className="visible" x1={guideCenterX} y1={guideCenterY} x2="600" y2="560" />
+                    <line className="visible" x1={guideCenterX} y1={guideCenterY} x2="340" y2="625" />
+                    <line className="visible" x1={guideCenterX} y1={guideCenterY} x2="430" y2="652" />
+                    <line className="visible" x1={guideCenterX} y1={guideCenterY} x2="520" y2="625" />
+                    <line className={showGuideLevel2 ? "visible" : ""} x1={guideScienceX} y1={guideScienceY} x2={guidePrimaryLevel2X} y2={guidePrimaryLevel2Y} />
+                    <line className={showGuideLevel2 ? "visible" : ""} x1={guideScienceX} y1={guideScienceY} x2={guideResearchX} y2={guideResearchY} />
+                    <line className={showGuideLevel2 ? "visible" : ""} x1={guideScienceX} y1={guideScienceY} x2={guideThirdLevel2X} y2={guideThirdLevel2Y} />
+                  </g>
+                  {showGuideRecords ? (
+                    <g className="guide-record-fan" aria-label="4차 데이터 노드">
+                      {guideFanRecords.map((label, index) => {
+                        const angle = -160 + (140 * index) / Math.max(guideFanRecords.length - 1, 1);
+                        const radians = (angle * Math.PI) / 180;
+                        const recordFanRadius = 540;
+                        const dotX = guideCenterX + Math.cos(radians) * recordFanRadius;
+                        const dotY = guideCenterY + Math.sin(radians) * recordFanRadius;
+                        const isFlipped = angle > 90 || angle < -90;
+                        const labelAngle = isFlipped ? angle + 180 : angle;
+                        const labelX = isFlipped ? -12 : 12;
+                        const labelAnchor = isFlipped ? "end" : "start";
+                        return (
+                          <g
+                            className="guide-record-fan-item"
+                            key={label}
+                            style={{ "--fan-delay": `${index * 18}ms` } as CSSProperties}
+                          >
+                            <line x1={guidePrimaryLevel2X} y1={guidePrimaryLevel2Y} x2={dotX} y2={dotY} />
+                            <g transform={`translate(${dotX} ${dotY})`}>
+                              <circle r={index === guideFanRecords.length - 1 ? 7 : 4.8} />
+                              <g className="guide-record-label-group" transform={`rotate(${labelAngle})`}>
+                                <text x={labelX} dy="0.35em" textAnchor={labelAnchor}>
+                                  {label}
+                                </text>
+                              </g>
+                            </g>
+                          </g>
+                        );
+                      })}
+                    </g>
+                  ) : null}
+                  <g className="guide-svg-node d3-node center search-match" transform={`translate(${guideCenterX} ${guideCenterY})`}>
+                    <circle r="46" />
+                    <text>
+                      {guideCenterLabelLines.length > 1 ? (
+                        <>
+                          <tspan x="0" y="-17">{guideCenterLabelLines[0]}</tspan>
+                          <tspan x="0" y="2">{guideCenterLabelLines[1]}</tspan>
+                          <tspan x="0" y="26">{guideScopeTotalLabel}</tspan>
+                        </>
+                      ) : (
+                        <>
+                          <tspan x="0" y="-6">{guideCenterLabel}</tspan>
+                          <tspan x="0" y="18">{guideScopeTotalLabel}</tspan>
+                        </>
+                      )}
+                    </text>
+                  </g>
+                  <g className={`guide-svg-node d3-node level1 guide-node-level1-primary${showGuideLevel2 ? " active" : ""}${hasMapSearch ? " search-match" : ""}`} transform={`translate(${guideScienceX} ${guideScienceY})`}>
+                    <circle r="48" />
+                    <text>
+                      <tspan x="0" y="-4">과학기술</tspan>
+                      <tspan x="0" y="16">{guideCategoryCounts.science}</tspan>
+                    </text>
+                  </g>
+                  <g className={`guide-svg-node d3-node level1 violet${guideNodeStateClass(guideCategoryCounts.communication)}`} transform="translate(560 360)">
+                    <circle r="46" />
+                    <text>
+                      <tspan x="0" y="-4">통신</tspan>
+                      <tspan x="0" y="15">{guideCategoryCounts.communication}</tspan>
+                    </text>
+                  </g>
+                  <g className={`guide-svg-node d3-node level1 sky${guideNodeStateClass(guideCategoryCounts.other)}`} transform="translate(300 360)">
+                    <circle r="46" />
+                    <text>
+                      <tspan x="0" y="-4">기타</tspan>
+                      <tspan x="0" y="15">{guideCategoryCounts.other}</tspan>
+                    </text>
+                  </g>
+                  <g className={`guide-svg-node d3-node level1 red${guideNodeStateClass(guideCategoryCounts.welfare)}`} transform="translate(240 455)">
+                    <circle r="44" />
+                    <text>
+                      <tspan x="0" y="-4">사회복지</tspan>
+                      <tspan x="0" y="14">{guideCategoryCounts.welfare}</tspan>
+                    </text>
+                  </g>
+                  <g className={`guide-svg-node d3-node level1 green${guideNodeStateClass(guideCategoryCounts.administration)}`} transform="translate(620 455)">
+                    <circle r="46" />
+                    <text>
+                      <tspan x="0" y="-4">일반공공행정</tspan>
+                      <tspan x="0" y="14">{guideCategoryCounts.administration}</tspan>
+                    </text>
+                  </g>
+                  <g className={`guide-svg-node d3-node level1 lime${guideNodeStateClass(guideCategoryCounts.environment)}`} transform="translate(260 555)">
+                    <circle r="42" />
+                    <text>
+                      <tspan x="0" y="-4">환경</tspan>
+                      <tspan x="0" y="14">{guideCategoryCounts.environment}</tspan>
+                    </text>
+                  </g>
+                  <g className={`guide-svg-node d3-node level1 orange${guideNodeStateClass(guideCategoryCounts.education)}`} transform="translate(600 560)">
+                    <circle r="42" />
+                    <text>
+                      <tspan x="0" y="-4">교육</tspan>
+                      <tspan x="0" y="14">{guideCategoryCounts.education}</tspan>
+                    </text>
+                  </g>
+                  <g className={`guide-svg-node d3-node level1 yellow${guideNodeStateClass(guideCategoryCounts.industry)}`} transform="translate(340 625)">
+                    <circle r="40" />
+                    <text>
+                      <tspan x="0" y="-10">산업·통상</tspan>
+                      <tspan x="0" y="7">중소기업</tspan>
+                      <tspan x="0" y="24">{guideCategoryCounts.industry}</tspan>
+                    </text>
+                  </g>
+                  <g className={`guide-svg-node d3-node level1 rose${guideNodeStateClass(guideCategoryCounts.transport)}`} transform="translate(430 652)">
+                    <circle r="40" />
+                    <text>
+                      <tspan x="0" y="-4">교통및물류</tspan>
+                      <tspan x="0" y="14">{guideCategoryCounts.transport}</tspan>
+                    </text>
+                  </g>
+                  <g className={`guide-svg-node d3-node level1 indigo${guideNodeStateClass(guideCategoryCounts.health)}`} transform="translate(520 625)">
+                    <circle r="40" />
+                    <text>
+                      <tspan x="0" y="-4">보건</tspan>
+                      <tspan x="0" y="14">{guideCategoryCounts.health}</tspan>
+                    </text>
+                  </g>
+                  <g className={`guide-svg-node d3-node level2 violet guide-primary-level2-node${showGuideRecords ? " active" : ""}${showGuideLevel2 ? " visible" : ""}`} transform={`translate(${guidePrimaryLevel2X} ${guidePrimaryLevel2Y})`}>
+                    <circle r="38" />
+                    <text>
+                      <tspan x="0" y="-4">과학기술연구</tspan>
+                      <tspan x="0" y="13">27</tspan>
+                    </text>
+                  </g>
+                  <g className={`guide-svg-node d3-node level2 green guide-research-node${showGuideLevel2 ? " visible" : ""}`} transform={`translate(${guideResearchX} ${guideResearchY})`}>
+                    <circle r="38" />
+                    <text>
+                      <tspan x="0" y="-4">연구사업</tspan>
+                      <tspan x="0" y="13">9</tspan>
+                    </text>
+                  </g>
+                  <g className={`guide-svg-node d3-node level2 orange${showGuideLevel2 ? " visible" : ""} guide-empty-node`} transform={`translate(${guideThirdLevel2X} ${guideThirdLevel2Y})`}>
+                    <circle r="38" />
+                    <text>
+                      <tspan x="0" y="-4">원자력기술</tspan>
+                      <tspan x="0" y="13">-</tspan>
+                    </text>
+                  </g>
+                  </g>
+                </svg>
+              </div>
+            </section>
+
+            {showGuideSidePanel ? (
+              <aside className={`detail-panel ${showGuideRecordDetail ? "record-mode" : "list-mode"}`}>
+                <div className="panel-title">
+                  <strong>{showGuideRecordDetail ? "여성과학기술인력_공공연구기관 직급별 승진현황" : "데이터 목록"}</strong>
+                  <div className="panel-actions">
+                    {showGuideRecordDetail ? (
+                      <button type="button" aria-label="데이터 목록으로 돌아가기">
+                        <Icon name="chevronLeft" size={17} />
+                      </button>
+                    ) : null}
+                    <button type="button" aria-label="닫기">
+                      <Icon name="x" size={17} />
+                    </button>
+                  </div>
+                </div>
+                <div className="detail-content">
+                  {showGuideRecordDetail ? (
+                    <section className="record-table-view">
+                      <table className="record-info-table">
+                        <tbody>
+                          <tr>
+                            <th>데이터명</th>
+                            <td>여성과학기술인력_공공연구기관 직급별 승진현황</td>
+                          </tr>
+                          <tr>
+                            <th>데이터유형</th>
+                            <td>API/파일데이터</td>
+                          </tr>
+                          <tr>
+                            <th>제공기관</th>
+                            <td>{guideFixedOrg}</td>
+                          </tr>
+                          <tr>
+                            <th>분류체계</th>
+                            <td>과학기술 - 과학기술진흥</td>
+                          </tr>
+                          <tr>
+                            <th>확장자</th>
+                            <td>CSV, XML, JSON</td>
+                          </tr>
+                          <tr>
+                            <th>갱신주기</th>
+                            <td>연간</td>
+                          </tr>
+                          <tr>
+                            <th>전체 행</th>
+                            <td>42</td>
+                          </tr>
+                          <tr>
+                            <th>키워드</th>
+                            <td>여성과학기술인, 공공연구기관, 과학기술자, 직급별, 승진, 여성, 남성</td>
+                          </tr>
+                          <tr>
+                            <th>수정일</th>
+                            <td>2026-07-10</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                      <button className={`data-portal-link${hasPortal ? " guide-portal-active" : ""}`} type="button">
+                        공공데이터 바로가기
+                      </button>
+                    </section>
+                  ) : (
+                    <section className="dataset-list-section">
+                      <div className="dataset-list-summary">
+                        <span>데이터 27</span>
+                        <span>파일 0</span>
+                        <span>API 0</span>
+                        <span>API/파일 27</span>
+                      </div>
+                      <ol className="dataset-list">
+                        {[
+                          "여성과학기술인력_공공연구기관 직급별 승진현황",
+                          "경제사회목적별 연구개발비 통계",
+                          "기술무역_국가별 기술수출 추이",
+                          "이공계인력실태조사_근로소득",
+                          "이공계인력실태조사_박사 근로소득",
+                          "이공계인력실태조사_최종 만족도",
+                          "이공계인력실태조사_학위별 성별 기초자료",
+                          "이공계인력실태조사_박사학위 전공별 현황",
+                          "국가연구개발사업 조사분석",
+                          "연구개발활동조사 통계",
+                        ].map((name, index) => (
+                          <li key={name}>
+                            <button className={index === 0 ? "guide-list-click-target" : ""} type="button">
+                              <span className="dataset-index">{index + 1}</span>
+                              <span className="dataset-dot" style={{ "--item-color": "#8b5cf6" } as CSSProperties} />
+                              <span className="dataset-name">{name}</span>
+                              <span className="dataset-kind-badge hybrid">API/파일</span>
+                            </button>
+                          </li>
+                        ))}
+                      </ol>
+                    </section>
+                  )}
+                </div>
+              </aside>
+            ) : null}
+          </section>
+        </div>
+        <footer className="guide-modal-footer" aria-label="가이드 재생 컨트롤">
+          <div className="guide-modal-step-dots" aria-label="가이드 단계">
+            {steps.map((item, index) => (
+              <button
+                className={index === stepIndex ? "active" : ""}
+                key={item.badge}
+                type="button"
+                onClick={() => moveStep(index)}
+                aria-label={`${item.badge}. ${item.title}`}
+              >
+                {item.badge}
+              </button>
+            ))}
+          </div>
+          <div className="guide-playback-controls">
+            <button type="button" onClick={() => moveStep(stepIndex - 1)} aria-label="이전 단계">
+              <Icon name="chevronLeft" size={18} />
+            </button>
+            <button
+              className="guide-play-toggle"
+              type="button"
+              onClick={() => setIsPaused((paused) => !paused)}
+              aria-label={isPaused ? "가이드 재생" : "가이드 정지"}
+            >
+              <Icon name={isPaused ? "play" : "pause"} size={18} />
+            </button>
+            <button type="button" onClick={() => moveStep(stepIndex + 1)} aria-label="다음 단계">
+              <Icon name="chevronRight" size={18} />
+            </button>
+          </div>
+          <span className="guide-progress-label">{guideProgressLabel}</span>
+        </footer>
+      </div>
+      {showConnector ? (
+        <svg className="guide-connector" aria-hidden="true">
+          <line x1={targetCenterX} y1={targetCenterY} x2={panelAnchorX} y2={panelAnchorY} />
+        </svg>
+      ) : null}
+      <div className="guide-spotlight" style={spotlightStyle} />
+      {showClickMotion ? <span className="guide-click-pulse" style={pointerStyle} /> : null}
+      <span className="guide-pointer" style={pointerStyle} />
+      {step.id === "kind" ? (
+        <div className="guide-select-popover" style={selectPopoverStyle} aria-hidden="true">
+          <span>전체 유형</span>
+          <span>API</span>
+          <span>파일데이터</span>
+          <strong>API/파일데이터</strong>
+        </div>
+      ) : null}
+
+      <section className="guide-callout" style={panelStyle}>
+        <div className="guide-callout-header">
+          <div className="guide-callout-heading">
+            <h2>{step.title}</h2>
+          </div>
+        </div>
+
+        <ul className="guide-script-list">
+          {typedLines.map((line) => (
+            <li key={line}>{line}</li>
+          ))}
+        </ul>
+      </section>
+    </div>
+  );
+}
+
 function NetworkGraph({
   center,
   items,
   labelHighlightTerm,
   onNodeClick,
+  recordAngleStepPx = 24,
   registerControls,
   selectedNodeId,
 }: {
@@ -868,6 +2564,7 @@ function NetworkGraph({
   items: GraphItem[];
   labelHighlightTerm: string;
   onNodeClick: (item: GraphItem) => void;
+  recordAngleStepPx?: number;
   registerControls: (controls: GraphControls | null) => void;
   selectedNodeId?: string;
 }) {
@@ -912,7 +2609,7 @@ function NetworkGraph({
     const level2Radius = level1Radius * 1.65;
     const level3Radius = level2Radius * 1.52;
     const recordRadius = level3Radius + Math.min(Math.max(level1Radius * 0.58, 85), 120);
-    const compactRecordAngleStep = 24 / Math.max(recordRadius, 1);
+    const compactRecordAngleStep = recordAngleStepPx / Math.max(recordRadius, 1);
     const level1Items = items.filter((item) => item.kind === "level1");
     const itemsById = new Map(items.map((item) => [item.id, item]));
     const level2ItemsByParent = new Map<string, GraphItem[]>();
@@ -1633,7 +3330,7 @@ function NetworkGraph({
 
       svg
         .transition()
-        .duration(420)
+        .duration(200)
         .call(zoom.transform, d3.zoomIdentity.translate(translateX, translateY).scale(scale));
     };
 
@@ -1653,10 +3350,10 @@ function NetworkGraph({
                 : 0;
         const target = item
           ? {
-              angle,
-              x: centerX + Math.cos(angle) * radius,
-              y: centerY + Math.sin(angle) * radius,
-            }
+            angle,
+            x: centerX + Math.cos(angle) * radius,
+            y: centerY + Math.sin(angle) * radius,
+          }
           : { x: centerX, y: centerY, angle: 0 };
         d.targetX = target.x;
         d.targetY = target.y;
@@ -1664,7 +3361,7 @@ function NetworkGraph({
       });
       updateRecordLabelOrientation();
       restoreTargetPositions();
-      svg.transition().duration(450).call(zoom.transform, d3.zoomIdentity);
+      svg.transition().duration(200).call(zoom.transform, d3.zoomIdentity);
     };
 
     registerControls({
@@ -1688,6 +3385,7 @@ function NetworkGraph({
     center,
     items,
     onNodeClick,
+    recordAngleStepPx,
     registerControls,
     size.height,
     size.width,
@@ -1761,6 +3459,15 @@ function NetworkGraph({
       .classed("active", (d) => d.id === selectedNodeId);
   }, [selectedNodeId]);
 
+  useEffect(() => {
+    if (!svgRef.current) return;
+
+    const hasSearchTerm = Boolean(labelHighlightTerm.trim());
+    d3.select(svgRef.current)
+      .selectAll<SVGGElement, GraphNode>(".d3-node")
+      .classed("search-match", (d) => hasSearchTerm && !d.isEmpty);
+  }, [labelHighlightTerm]);
+
   return (
     <div className="network-canvas" ref={containerRef}>
       <svg
@@ -1786,14 +3493,21 @@ export function DataMapClient() {
   const [selectedId, setSelectedId] = useState("");
   const sortKey: SortKey = "views";
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
+  const [guideStepIndex, setGuideStepIndex] = useState(0);
   const [detailQuery, setDetailQuery] = useState("");
   const [datasetPage, setDatasetPage] = useState(0);
   const [graphRevealLimit, setGraphRevealLimit] = useState(50);
+  const [allNodesExpanded, setAllNodesExpanded] = useState(false);
   const [isKeywordDragging, setIsKeywordDragging] = useState(false);
   const graphControls = useRef<GraphControls | null>(null);
   const urlStateAppliedRef = useRef(false);
   const orgFilterRef = useRef<HTMLDivElement | null>(null);
   const keywordPagerRef = useRef<HTMLDivElement | null>(null);
+  const guideAppliedStepRef = useRef("");
+  const guideKeywordRef = useRef("");
+  const guideMapTermRef = useRef("");
+  const guideOrgRef = useRef("");
   const keywordDragRef = useRef<{
     pointerId: number;
     startX: number;
@@ -1854,6 +3568,16 @@ export function DataMapClient() {
     setDetailsOpen(Boolean(nextTheme || nextCategory || nextRecord));
     urlStateAppliedRef.current = true;
   }, []);
+
+  useEffect(() => {
+    if (guideOpen) {
+      setGuideStepIndex(0);
+      guideAppliedStepRef.current = "";
+      guideKeywordRef.current = "";
+      guideMapTermRef.current = "";
+      guideOrgRef.current = "";
+    }
+  }, [guideOpen]);
 
   const catalogSummary = useMemo(() => summarizeCatalog(datasets), [datasets]);
   const themeOrder = useMemo(
@@ -2056,18 +3780,17 @@ export function DataMapClient() {
       theme: stat.theme,
     }));
     const items = [...level1Items];
-
-    if (selectedTheme) {
+    const appendLevel2Nodes = (theme: string) => {
       const level1Records =
-        selectedTheme === "기타"
-          ? baseRecords.filter((r) => level1KiTaSet.has(level1Label(r)))
-          : baseRecords.filter((r) => level1Label(r) === selectedTheme);
-      const themeIndex = Math.max(themeOrder.indexOf(selectedTheme), 0);
+        theme === "기타"
+          ? baseRecords.filter((record) => level1KiTaSet.has(level1Label(record)))
+          : baseRecords.filter((record) => level1Label(record) === theme);
+      const themeIndex = Math.max(themeOrder.indexOf(theme), 0);
 
       // 3차 노드 – 기타 아래는 원래 2차 노드, 일반 분류 아래는 2차분류
       const rawGroups = new Map<string, DatasetRecord[]>();
       for (const r of level1Records) {
-        const cat = selectedTheme === "기타" ? level1Label(r) : level2Label(r);
+        const cat = theme === "기타" ? level1Label(r) : level2Label(r);
         const arr = rawGroups.get(cat) ?? [];
         arr.push(r);
         rawGroups.set(cat, arr);
@@ -2084,15 +3807,15 @@ export function DataMapClient() {
           categoryColorMap.set(category, color);
           const summary = summarizeRecords(recordsInGroup);
           return {
-            id: level2NodeId(selectedTheme, category),
+            id: level2NodeId(theme, category),
             kind: "level2",
             label: category,
             countLabel: formatNumber(recordsInGroup.length),
             color,
             radius: level2NodeRadius,
-            tooltip: summaryTooltip(`${selectedTheme} > ${category}`, summary),
-            parentId: level1NodeId(selectedTheme),
-            theme: selectedTheme,
+            tooltip: summaryTooltip(`${theme} > ${category}`, summary),
+            parentId: level1NodeId(theme),
+            theme,
             categoryLevel2: category,
           };
         }),
@@ -2100,17 +3823,32 @@ export function DataMapClient() {
 
       if (hiddenGroupCount > 0) {
         items.push({
-          id: `overflow-${level1NodeId(selectedTheme)}`,
+          id: `overflow-${level1NodeId(theme)}`,
           kind: "overflow",
           label: "더보기",
           countLabel: `+${formatNumber(hiddenGroupCount)}`,
           color: selectedColor,
           radius: level2NodeRadius,
-          tooltip: `${selectedTheme}\n더보기를 누르면 10개씩 추가 표시됩니다.\n오른쪽 데이터 상세보기 목록에서도 전체를 검색할 수 있습니다.`,
-          parentId: level1NodeId(selectedTheme),
-          theme: selectedTheme,
+          tooltip: `${theme}\n더보기를 누르면 10개씩 추가 표시됩니다.\n오른쪽 데이터 상세보기 목록에서도 전체를 검색할 수 있습니다.`,
+          parentId: level1NodeId(theme),
+          theme,
         });
       }
+
+      return {
+        categoryColorMap,
+        rawGroups,
+        themeIndex,
+      };
+    };
+
+    if (allNodesExpanded) {
+      for (const item of level1Items) {
+        if (!item.theme || item.isEmpty) continue;
+        appendLevel2Nodes(item.theme);
+      }
+    } else if (selectedTheme) {
+      const { categoryColorMap, rawGroups, themeIndex } = appendLevel2Nodes(selectedTheme);
 
       // 데이터 점 – 선택한 3차 노드 아래에 바로 표시, 50건 초과 시 더보기
       if (selectedCategoryLevel2) {
@@ -2160,6 +3898,7 @@ export function DataMapClient() {
       items,
     };
   }, [
+    allNodesExpanded,
     baseRecords,
     query,
     selectedTheme,
@@ -2187,7 +3926,9 @@ export function DataMapClient() {
     }
     return map;
   }, [graphData.items]);
-  const selectedGraphNodeId = selectedId
+  const selectedGraphNodeId = allNodesExpanded
+    ? ""
+    : selectedId
     ? `record-${selectedId}`
     : selectedCategoryLevel2 && selectedTheme
       ? level2NodeId(selectedTheme, selectedCategoryLevel2)
@@ -2199,7 +3940,20 @@ export function DataMapClient() {
     graphControls.current = controls;
   }, []);
 
+  const toggleAllNodes = useCallback(() => {
+    const nextExpanded = !allNodesExpanded;
+    setAllNodesExpanded(nextExpanded);
+    setSelectedTheme("");
+    setSelectedCategoryLevel2("");
+    setSelectedId("");
+    setDatasetPage(0);
+    setGraphRevealLimit(nextExpanded ? 5000 : 50);
+    setDetailsOpen(false);
+    window.setTimeout(() => graphControls.current?.fitAll(), 0);
+  }, [allNodesExpanded]);
+
   const chooseTheme = useCallback((theme: string) => {
+    setAllNodesExpanded(false);
     setSelectedTheme(theme);
     setSelectedCategoryLevel2("");
     setSelectedId("");
@@ -2209,6 +3963,7 @@ export function DataMapClient() {
   }, []);
 
   const chooseCategoryLevel2 = useCallback((theme: string, category: string) => {
+    setAllNodesExpanded(false);
     setSelectedTheme(theme);
     setSelectedCategoryLevel2(category);
     setSelectedId("");
@@ -2218,6 +3973,7 @@ export function DataMapClient() {
   }, []);
 
   const chooseRecord = useCallback((record: DatasetRecord) => {
+    setAllNodesExpanded(false);
     const theme = level1Label(record);
     setSelectedTheme(level1KiTaSet.has(theme) ? "기타" : theme);
     setSelectedCategoryLevel2(level1KiTaSet.has(theme) ? theme : level2Label(record));
@@ -2267,6 +4023,7 @@ export function DataMapClient() {
       "";
 
     setQuery(term);
+    setAllNodesExpanded(false);
     setSelectedTheme(nextTheme);
     setSelectedCategoryLevel2("");
     setSelectedId("");
@@ -2281,6 +4038,7 @@ export function DataMapClient() {
       themeOrder.find((theme) => baseRecords.some((record) => level1Label(record) === theme)) ??
       "";
 
+    setAllNodesExpanded(false);
     setSelectedTheme(nextTheme);
     setSelectedCategoryLevel2("");
     setSelectedId("");
@@ -2292,6 +4050,7 @@ export function DataMapClient() {
 
   function chooseKind(kind: KindFilter) {
     setActiveKind(kind);
+    setAllNodesExpanded(false);
     setSelectedTheme("");
     setSelectedCategoryLevel2("");
     setSelectedId("");
@@ -2301,6 +4060,7 @@ export function DataMapClient() {
   }
 
   function resetOrgScopedSelection() {
+    setAllNodesExpanded(false);
     setSelectedTheme("");
     setSelectedCategoryLevel2("");
     setSelectedId("");
@@ -2328,6 +4088,7 @@ export function DataMapClient() {
     setActiveKind("all");
     setSelectedOrgs([]);
     setOrgMenuOpen(false);
+    setAllNodesExpanded(false);
     setSelectedTheme("");
     setSelectedCategoryLevel2("");
     setSelectedId("");
@@ -2435,6 +4196,212 @@ export function DataMapClient() {
     setDatasetPage(Math.min(Math.max(page, 0), datasetPageCount - 1));
   }
 
+  function pickGuideKind(): KindFilter {
+    return guideFixedKind;
+  }
+
+  function pickGuideOrg(kind: KindFilter) {
+    if (guideOrgRef.current) return guideOrgRef.current;
+
+    const candidates = orgOptions.filter((org) =>
+      datasets.some((record) => record.제공기관 === org && matchesKindFilter(record, kind)),
+    );
+    const nextOrg =
+      candidates.find((org) => org === guideFixedOrg) ??
+      candidates.find((org) => org.includes(guideFixedOrg)) ??
+      candidates[0] ??
+      orgOptions[0] ??
+      "";
+    guideOrgRef.current = nextOrg;
+    return nextOrg;
+  }
+
+  function pickGuideRecords() {
+    return datasets.filter((record) => {
+      const orgMatch = !guideOrgRef.current || record.제공기관 === guideOrgRef.current;
+      return matchesKindFilter(record, activeKind) && orgMatch;
+    });
+  }
+
+  function pickGuideTerm(records: DatasetRecord[], avoidTerm = "") {
+    const normalizedAvoid = cleanText(avoidTerm);
+    const candidates: string[] = [];
+
+    for (const record of records.length ? records : datasets) {
+      candidates.push(...record.키워드);
+      candidates.push(...record.name.split(/[\s_,./-]+/));
+    }
+
+    const cleanedCandidates = candidates.map((item) => item.trim()).filter((item) => item.length >= 2);
+    const differentCandidates = cleanedCandidates.filter((item) => {
+      if (!normalizedAvoid) return true;
+      return item !== normalizedAvoid && !normalizedAvoid.includes(item) && !item.includes(normalizedAvoid);
+    });
+
+    return (
+      differentCandidates.find((item) => item.length >= 4) ??
+      differentCandidates[0] ??
+      cleanedCandidates.find((item) => item.length >= 4) ??
+      cleanedCandidates[0] ??
+      ""
+    );
+  }
+
+  function applyGuideRecordScope(record: DatasetRecord) {
+    const theme = level1Label(record);
+    const guideTheme = level1KiTaSet.has(theme) ? "기타" : theme;
+    const guideCategory = level1KiTaSet.has(theme) ? theme : level2Label(record);
+
+    setSelectedTheme(guideTheme);
+    setSelectedCategoryLevel2(guideCategory);
+    setSelectedId("");
+    setDatasetPage(0);
+    setGraphRevealLimit(5000);
+    setDetailsOpen(true);
+  }
+
+  function pickGuideKeyword() {
+    guideKeywordRef.current = guideKeywordTerm;
+    return guideKeywordRef.current;
+  }
+
+  useEffect(() => {
+    if (!guideOpen || !datasets.length) return;
+    return;
+
+    const step = guideSteps[guideStepIndex] ?? guideSteps[0];
+    const runKey = `${guideStepIndex}:${step.id}:${datasets.length}`;
+    if (guideAppliedStepRef.current === runKey) return;
+    guideAppliedStepRef.current = runKey;
+
+    const timers: number[] = [];
+    const clearScopedSelection = () => {
+      setSelectedTheme("");
+      setSelectedCategoryLevel2("");
+      setSelectedId("");
+      setDetailQuery("");
+      setDatasetPage(0);
+      setGraphRevealLimit(50);
+      setDetailsOpen(true);
+    };
+    const typeInto = (setValue: (value: string) => void, term: string, afterTyping?: () => void) => {
+      setValue("");
+      const letters = [...term];
+      letters.forEach((_, index) => {
+        timers.push(window.setTimeout(() => {
+          setValue(letters.slice(0, index + 1).join(""));
+        }, 95 * (index + 1)));
+      });
+      timers.push(window.setTimeout(() => {
+        afterTyping?.();
+      }, 95 * letters.length + 260));
+    };
+    const scrollGuideOrgChoice = () => {
+      document.querySelector(".org-filter-option.guide-org-choice")?.scrollIntoView({
+        block: "center",
+        behavior: "smooth",
+      });
+    };
+
+    switch (step.id) {
+      case "kind": {
+        const kind = pickGuideKind();
+        setOrgMenuOpen(false);
+        setQuery("");
+        chooseKind("all");
+        setDetailsOpen(true);
+        timers.push(window.setTimeout(() => chooseKind(kind), 850));
+        break;
+      }
+      case "org": {
+        const org = pickGuideOrg(activeKind);
+        if (org) {
+          setQuery("");
+          setSelectedOrgs([]);
+          setOrgMenuOpen(true);
+          clearScopedSelection();
+          timers.push(window.setTimeout(() => setSelectedOrgs([org]), 650));
+          timers.push(window.setTimeout(scrollGuideOrgChoice, 760));
+          timers.push(window.setTimeout(scrollGuideOrgChoice, 1180));
+        }
+        break;
+      }
+      case "mapSearch": {
+        setOrgMenuOpen(false);
+        const term = guideMapSearchTerm;
+        guideMapTermRef.current = term;
+        typeInto(setQuery, term, () => {
+          setQuery(term);
+          setSelectedTheme("");
+          setSelectedCategoryLevel2("");
+          setSelectedId("");
+          setDetailQuery("");
+          setDatasetPage(0);
+          setGraphRevealLimit(50);
+          setDetailsOpen(true);
+        });
+        break;
+      }
+      case "detailSearch": {
+        setOrgMenuOpen(false);
+        const sourceRecords = detailRecords.length ? detailRecords : selectedRecords.length ? selectedRecords : datasets;
+        const guideRecord = sourceRecords.find((record) => record.키워드.length > 0) ?? sourceRecords[0];
+        if (guideRecord) applyGuideRecordScope(guideRecord);
+        const term = guideDetailSearchTerm;
+        typeInto(setDetailQuery, term);
+        setDatasetPage(0);
+        setDetailsOpen(true);
+        break;
+      }
+      case "keyword": {
+        setOrgMenuOpen(false);
+        setDetailQuery("");
+        const keyword = pickGuideKeyword();
+        if (keyword) handleKeywordClick(keyword);
+        break;
+      }
+      case "controls": {
+        setOrgMenuOpen(false);
+        setDetailsOpen(true);
+        break;
+      }
+      case "level1Node": {
+        setOrgMenuOpen(false);
+        setSelectedId("");
+        const item = graphData.items.find((candidate) => candidate.kind === "level1" && !candidate.isEmpty);
+        if (item) handleGraphNodeClick(item as GraphItem);
+        break;
+      }
+      case "level2Node": {
+        setOrgMenuOpen(false);
+        const item = graphData.items.find((candidate) => candidate.kind === "level2" && !candidate.isEmpty);
+        if (item) {
+          handleGraphNodeClick(item as GraphItem);
+          setGraphRevealLimit(5000);
+        } else {
+          const record = selectedRecords[0] ?? baseRecords[0] ?? datasets[0];
+          if (record) applyGuideRecordScope(record);
+        }
+        break;
+      }
+      case "dataList": {
+        setOrgMenuOpen(false);
+        setSelectedId("");
+        setDetailsOpen(true);
+        setDatasetPage(0);
+        const record = visibleDetailRecords[0] ?? detailRecords[0] ?? selectedRecords[0] ?? datasets[0];
+        if (record) {
+          timers.push(window.setTimeout(() => chooseRecord(record), 1500));
+        }
+        break;
+      }
+    }
+
+    return () => {
+      timers.forEach((timer) => window.clearTimeout(timer));
+    };
+  }, [guideOpen, guideStepIndex, datasets.length]);
+
   const isRecordDetail = Boolean(activeSelectedId && selectedRecord);
   const selectedRecordRows = isRecordDetail && selectedRecord ? recordInfoRows(selectedRecord) : [];
   const selectedPortalUrl = selectedRecord ? dataGoKrUrl(selectedRecord) : "";
@@ -2496,7 +4463,13 @@ export function DataMapClient() {
                     <span>전체 기관</span>
                   </label>
                   {orgOptions.map((org) => (
-                    <label className="org-filter-option" key={org}>
+                    <label
+                      className={`org-filter-option${guideOpen && guideSteps[guideStepIndex]?.id === "org" && selectedOrgs.includes(org)
+                          ? " guide-org-choice"
+                          : ""
+                        }`}
+                      key={org}
+                    >
                       <input
                         type="checkbox"
                         checked={selectedOrgs.includes(org)}
@@ -2602,8 +4575,9 @@ export function DataMapClient() {
             <button
               className="canvas-help-button"
               type="button"
-              title="분류 노드를 클릭하면 하위 데이터가 표시됩니다."
-              aria-label="간단 도움말"
+              onClick={() => setGuideOpen(true)}
+              title="데이터맵 온라인 가이드 열기"
+              aria-label="데이터맵 온라인 가이드 열기"
             >
               <Icon name="help" size={17} />
             </button>
@@ -2619,8 +4593,15 @@ export function DataMapClient() {
             selectedNodeId={selectedGraphNodeId}
           />
           <div className="canvas-map-controls" aria-label="지도 확대 축소">
-            <button className="fit-view-button" type="button" onClick={() => graphControls.current?.fitAll()} aria-label="전체 보기">
-              <Icon name="fitView" size={18} />
+            <button
+              className={`fit-view-button${allNodesExpanded ? " expanded" : ""}`}
+              type="button"
+              onClick={toggleAllNodes}
+              title={allNodesExpanded ? "기본 노드만 보기" : "전체 노드 펼치기"}
+              aria-label={allNodesExpanded ? "기본 노드만 보기" : "전체 노드 펼치기"}
+              aria-pressed={allNodesExpanded}
+            >
+              <Icon name={allNodesExpanded ? "collapseView" : "fitView"} size={18} />
             </button>
             <button type="button" onClick={() => graphControls.current?.zoomIn()} aria-label="확대">
               <Icon name="plus" size={18} />
@@ -2690,9 +4671,9 @@ export function DataMapClient() {
                               style={
                                 {
                                   "--item-color":
-                                nodeColorMap.get(selectedCategoryLevel2) ??
-                                nodeColorMap.get(level1Label(record)) ??
-                                kindColor(record),
+                                    nodeColorMap.get(selectedCategoryLevel2) ??
+                                    nodeColorMap.get(level1Label(record)) ??
+                                    kindColor(record),
                                 } as CSSProperties
                               }
                               aria-hidden="true"
@@ -2772,6 +4753,15 @@ export function DataMapClient() {
           {formatNumber(visibleTotals.hybrids)}
         </span>
       </footer>
+      <GuideTour
+        open={guideOpen}
+        onClose={() => setGuideOpen(false)}
+        onStepChange={setGuideStepIndex}
+        stepIndex={guideStepIndex}
+        steps={guideSteps}
+        crawledAt={crawledAt}
+        datasets={datasets}
+      />
     </main>
   );
 }
