@@ -88,6 +88,73 @@ jobs:
       - name: Run crawler
         run: node crawler/crawler_api_과기부.js --fresh
 
+      - name: Summarize datamap
+        if: always()
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const p = 'crawler/datamap.json';
+          if (!fs.existsSync(p)) {
+            fs.appendFileSync(process.env.GITHUB_ENV, 'DATAMAP_ORGS=0\nDATAMAP_FILE=0\nDATAMAP_API=0\nDATAMAP_HYBRID=0\nDATAMAP_ERRORS=1\nDATAMAP_TOTAL=0\nDATAMAP_ERROR_SUMMARY=datamap.json not found\n');
+            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, '## Datamap summary\n\n`crawler/datamap.json` 파일이 없습니다.\n');
+            process.exit(0);
+          }
+
+          const data = JSON.parse(fs.readFileSync(p, 'utf8'));
+          const orgs = Array.isArray(data.organizations) ? data.organizations : [];
+          const datasets = orgs.flatMap((org) => [
+            ...(Array.isArray(org.file) ? org.file : []),
+            ...(Array.isArray(org.api) ? org.api : []),
+            ...(Array.isArray(org.datasets) ? org.datasets : []),
+          ]);
+          const unique = new Map();
+          for (const item of datasets) {
+            const key = String(item['링크'] || item.href || item['제목'] || item.title || unique.size);
+            unique.set(key, item);
+          }
+
+          const items = [...unique.values()];
+          const file = items.filter((item) => item['유형'] === '파일데이터').length;
+          const api = items.filter((item) => item['유형'] === 'API').length;
+          const hybrid = items.filter((item) => item['유형'] === 'API/파일데이터').length;
+          const errorsByOrg = orgs.flatMap((org) =>
+            (Array.isArray(org.errors) ? org.errors : []).map((error) => `${org.org}: ${error}`)
+          );
+          const errorSummary = errorsByOrg.slice(0, 10).join(' | ');
+
+          fs.appendFileSync(process.env.GITHUB_ENV, [
+            `DATAMAP_ORGS=${orgs.length}`,
+            `DATAMAP_FILE=${file}`,
+            `DATAMAP_API=${api}`,
+            `DATAMAP_HYBRID=${hybrid}`,
+            `DATAMAP_ERRORS=${errorsByOrg.length}`,
+            `DATAMAP_TOTAL=${items.length}`,
+            `DATAMAP_ERROR_SUMMARY=${errorSummary}`,
+            '',
+          ].join('\n'));
+
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, [
+            '## Datamap summary',
+            '',
+            `- 기관: ${orgs.length}`,
+            `- 파일데이터: ${file}`,
+            `- API: ${api}`,
+            `- API/파일데이터: ${hybrid}`,
+            `- 전체 데이터셋: ${items.length}`,
+            `- 오류: ${errorsByOrg.length}`,
+            '',
+            ...errorsByOrg.slice(0, 20).map((error) => `- ${error}`),
+            '',
+          ].join('\n'));
+          NODE
+
+      - name: Validate crawl result
+        run: |
+          if [ "${DATAMAP_TOTAL:-0}" -eq 0 ]; then
+            echo "No datasets were collected. Stop before copy/build/deploy."
+            exit 1
+          fi
+
       - name: Copy latest datamap to web public
         run: node scripts/copy_datamap.js
 
@@ -104,30 +171,6 @@ jobs:
             exit 0
           fi
           npx wrangler deploy --config datamap-web/wrangler.jsonc
-
-      - name: Summarize datamap
-        if: always()
-        run: |
-          node - <<'NODE'
-          const fs = require('fs');
-          const p = 'crawler/datamap.json';
-          if (!fs.existsSync(p)) process.exit(0);
-          const data = JSON.parse(fs.readFileSync(p, 'utf8'));
-          const orgs = Array.isArray(data.organizations) ? data.organizations : [];
-          const datasets = orgs.flatMap((org) => Array.isArray(org.datasets) ? org.datasets : []);
-          const file = datasets.filter((item) => item['유형'] === '파일데이터').length;
-          const api = datasets.filter((item) => item['유형'] === 'API').length;
-          const hybrid = datasets.filter((item) => item['유형'] === 'API/파일데이터').length;
-          const errors = orgs.reduce((n, org) => n + (Array.isArray(org.errors) ? org.errors.length : 0), 0);
-          fs.appendFileSync(process.env.GITHUB_ENV, [
-            `DATAMAP_ORGS=${orgs.length}`,
-            `DATAMAP_FILE=${file}`,
-            `DATAMAP_API=${api}`,
-            `DATAMAP_HYBRID=${hybrid}`,
-            `DATAMAP_ERRORS=${errors}`,
-            '',
-          ].join('\n'));
-          NODE
 
       - name: Upload datamap artifact
         if: always()
@@ -193,4 +236,4 @@ jobs:
           fi
           curl -s -X POST "$SLACK_WEBHOOK_URL" \
             -H 'Content-Type: application/json' \
-            -d "{\"text\": \":red_circle: *weekly-crawl* 실패\\n실행방식: \`${RUN_SOURCE}\`\\n사유: \`${RUN_REASON}\`\\n기관: \`${DATAMAP_ORGS:-0}\`, 파일: \`${DATAMAP_FILE:-0}\`, API: \`${DATAMAP_API:-0}\`, API/파일: \`${DATAMAP_HYBRID:-0}\`, errors: \`${DATAMAP_ERRORS:-0}\`\\n실행ID: \`${{ github.run_id }}\`\\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|로그 보기>\"}"
+            -d "{\"text\": \":red_circle: *weekly-crawl* 실패\\n실행방식: \`${RUN_SOURCE}\`\\n사유: \`${RUN_REASON}\`\\n기관: \`${DATAMAP_ORGS:-0}\`, 파일: \`${DATAMAP_FILE:-0}\`, API: \`${DATAMAP_API:-0}\`, API/파일: \`${DATAMAP_HYBRID:-0}\`, errors: \`${DATAMAP_ERRORS:-0}\`\\n오류요약: \`${DATAMAP_ERROR_SUMMARY:-없음}\`\\n실행ID: \`${{ github.run_id }}\`\\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|로그 보기>\"}"
