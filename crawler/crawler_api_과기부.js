@@ -216,6 +216,11 @@ function cacheKey(href, dType) {
   return id ? `${dType}:${id}` : `${dType}:${normalizedHref}`;
 }
 
+function datasetIdentity(item) {
+  const href = item?.['링크'] ?? item?.href ?? '';
+  return extractDataId(href) || clean(href) || clean(item?.['제목'] ?? item?.title);
+}
+
 function readJsonFile(file) {
   try {
     if (!fs.existsSync(file)) return null;
@@ -252,6 +257,38 @@ function buildDetailCache(outputFile) {
   }
 
   return cache;
+}
+
+function buildPreviousOrgMap(outputFile) {
+  const latestFile = latestOutputFileFor(outputFile);
+  const source = readJsonFile(latestFile) ?? readJsonFile(outputFile);
+  const map = new Map();
+  for (const org of source?.organizations ?? []) {
+    if (org?.org) map.set(org.org, org);
+  }
+  return map;
+}
+
+function detectDeletedItems(previousOrg, currentOrg) {
+  if (!previousOrg) return [];
+
+  const currentIds = new Set([...currentOrg.file, ...currentOrg.api].map(datasetIdentity).filter(Boolean));
+  const deleted = [];
+  const seen = new Set();
+
+  for (const item of [...(previousOrg.file ?? []), ...(previousOrg.api ?? [])]) {
+    const id = datasetIdentity(item);
+    if (!id || currentIds.has(id) || seen.has(id)) continue;
+    seen.add(id);
+    deleted.push({
+      링크: item['링크'] ?? item.href ?? '',
+      제목: item['제목'] ?? item.title ?? '',
+      유형: item['유형'] ?? typeLabel(item.type),
+      삭제사유: '현재 data.go.kr 목록에서 확인되지 않아 최신 JSON에서 제외됨',
+    });
+  }
+
+  return deleted;
 }
 
 function typedDetailLabel(dType) {
@@ -805,7 +842,7 @@ async function scrapeAllDetails(links, cookie, dType, detailCache = new Map()) {
 
 // 기관별로 파일데이터와 API를 차례로 수집하는 함수 영역임
 
-async function crawlOrg(page, ctx, orgName, detailCache) {
+async function crawlOrg(page, ctx, orgName, detailCache, previousOrg = null) {
   const result = { org: orgName, file: [], api: [], counts: { expected: {}, actual: {} }, errors: [] };
   const maxItems = parseInt(getArg('--max-items') ?? '0', 10) || null;
   let tabCounts = {};
@@ -844,6 +881,16 @@ async function crawlOrg(page, ctx, orgName, detailCache) {
 
   validateCollectedCounts(result, tabCounts, maxItems);
 
+  const collectedCount = result.file.length + result.api.length;
+  const hasCountMismatch = result.errors.some(error => error.includes('탭 표시'));
+  if (previousOrg && collectedCount > 0 && !hasCountMismatch) {
+    const deleted = detectDeletedItems(previousOrg, result);
+    if (deleted.length > 0) {
+      result.deleted = deleted;
+      logger.warn({ orgName, count: deleted.length }, '이전 JSON에는 있었지만 현재 목록에서 사라진 데이터를 기록함');
+    }
+  }
+
   return result;
 }
 
@@ -854,6 +901,7 @@ async function run() {
   const fromOrg    = getArg('--from');
   const limitCount = parseInt(getArg('--limit') ?? '0') || null;
   const fresh      = process.argv.includes('--fresh');
+  const resume     = process.argv.includes('--resume');
 
   const startIdx  = fromOrg ? Math.max(0, ORGS.indexOf(fromOrg)) : 0;
   const endIdx    = limitCount ? startIdx + limitCount : ORGS.length;
@@ -872,8 +920,9 @@ async function run() {
   // 이전 진행 상황을 로드해 크래시 후 재개를 지원함
   const out = { crawled_at: new Date().toISOString(), organizations: [] };
   const detailCache = fresh ? new Map() : buildDetailCache(outputFile);
+  const previousOrgMap = fresh ? new Map() : buildPreviousOrgMap(outputFile);
   logger.info({ count: detailCache.size, fresh }, '기존 datamap 상세 캐시를 준비함');
-  if (!fresh && fs.existsSync(outputFile)) {
+  if (resume && !fresh && fs.existsSync(outputFile)) {
     try {
       const prev = JSON.parse(fs.readFileSync(outputFile, 'utf-8'));
       out.organizations = prev.organizations ?? [];
@@ -905,7 +954,7 @@ async function run() {
       }
 
       logger.info({ orgName }, '══ 기관 크롤링 시작');
-      const result = await crawlOrg(page, ctx, orgName, detailCache);
+      const result = await crawlOrg(page, ctx, orgName, detailCache, previousOrgMap.get(orgName));
       out.organizations.push(result);
 
       // 기관 하나 완료 시 즉시 저장해 중간 장애에 대비함

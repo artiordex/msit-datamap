@@ -86,7 +86,7 @@ jobs:
             "https://www.data.go.kr/tcs/dss/selectDataSetList.do" || true
 
       - name: Run crawler
-        run: node crawler/crawler_api_과기부.js --fresh
+        run: node crawler/crawler_api_과기부.js
 
       - name: Summarize datamap
         if: always()
