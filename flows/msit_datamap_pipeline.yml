@@ -1,96 +1,52 @@
 id: msit_datamap_pipeline
 namespace: msit.datamap
-description: 과학기술정보통신부 공공데이터 수집 → 처리 → 데이터맵 배포 파이프라인
+description: GitHub Actions를 호출해 과기부 데이터맵 크롤링, Cloudflare 배포, Slack 알림, Pub/Sub 발행을 실행하는 플로
 
 labels:
   project: msit-datamap
   owner: msit
 
 triggers:
-  - id: weekly_monday_0900_kst
+  - id: weekly_friday_2100_kst
     type: io.kestra.plugin.core.trigger.Schedule
-    cron: "0 9 * * 1"
+    cron: "0 21 * * 5"
     timezone: Asia/Seoul
 
 inputs:
-  - id: project_dir
+  - id: github_repository
     type: STRING
-    defaults: C:/식약처/data.go.kr/과기부
-  - id: org_name
+    defaults: artiordex/msit-datamap
+  - id: event_type
     type: STRING
-    defaults: 과학기술정보통신부
-  - id: org_code
+    defaults: msit-weekly-crawl
+  - id: run_reason
     type: STRING
-    defaults: B130007
+    defaults: kestra-schedule
 
 tasks:
   - id: start_log
     type: io.kestra.plugin.core.log.Log
-    message: "Start {{ flow.id }} org={{ inputs.org_name }} execution={{ execution.id }}"
+    message: "Start {{ flow.id }} execution={{ execution.id }} repository={{ inputs.github_repository }}"
 
-  - id: crawl
-    type: io.kestra.plugin.scripts.node.Commands
-    taskRunner:
-      type: io.kestra.plugin.core.runner.Process
-    commands:
-      - node "{{ inputs.project_dir }}/crawler/crawler_api_한국지역난방공사.js"
-          --org-name "{{ inputs.org_name }}"
-          --org-code "{{ inputs.org_code }}"
-          --output-dir "{{ inputs.project_dir }}/crawler/data_go_kr"
-    timeout: PT30M
-    retry:
-      type: constant
-      interval: PT2M
-      maxAttempts: 3
-      maxDuration: PT1H
-      warningOnRetry: true
-
-  - id: build_dataset
-    type: io.kestra.plugin.scripts.python.Commands
-    taskRunner:
-      type: io.kestra.plugin.core.runner.Process
-    env:
-      PYTHONIOENCODING: utf-8
-    commands:
-      - python "{{ inputs.project_dir }}/scripts/build_dataset.py"
-          --project-dir "{{ inputs.project_dir }}"
-          --org-name "{{ inputs.org_name }}"
-    timeout: PT10M
-
-  - id: deploy_datamap
-    type: io.kestra.plugin.scripts.node.Commands
-    taskRunner:
-      type: io.kestra.plugin.core.runner.Process
-    commands:
-      - npm --prefix "{{ inputs.project_dir }}/datamap-web" run build
-      - npx wrangler deploy --config "{{ inputs.project_dir }}/datamap-web/wrangler.jsonc"
-    timeout: PT10M
-
-errors:
-  - id: publish_failure
-    type: io.kestra.plugin.scripts.node.Commands
-    taskRunner:
-      type: io.kestra.plugin.core.runner.Process
-    commands:
-      - node "{{ inputs.project_dir }}/scripts/redis_publisher.js"
-          --channel msit:pipeline:events
-          --status failure
-          --flow "{{ flow.id }}"
-          --execution "{{ execution.id }}"
-          --task "{{ taskrun.id }}"
-
-finally:
-  - id: publish_result
-    type: io.kestra.plugin.scripts.node.Commands
-    taskRunner:
-      type: io.kestra.plugin.core.runner.Process
-    commands:
-      - node "{{ inputs.project_dir }}/scripts/redis_publisher.js"
-          --channel msit:pipeline:events
-          --status "{{ execution.state.current == 'SUCCESS' ? 'success' : 'failure' }}"
-          --flow "{{ flow.id }}"
-          --execution "{{ execution.id }}"
+  - id: trigger_github_actions
+    type: io.kestra.plugin.core.http.Request
+    uri: "https://api.github.com/repos/{{ inputs.github_repository }}/dispatches"
+    method: POST
+    contentType: application/json
+    headers:
+      Accept: application/vnd.github+json
+      Authorization: "Bearer {{ secret('GITHUB_TOKEN') }}"
+      X-GitHub-Api-Version: "2022-11-28"
+    body: |
+      {
+        "event_type": "{{ inputs.event_type }}",
+        "client_payload": {
+          "run_reason": "{{ inputs.run_reason }}",
+          "triggered_by": "kestra",
+          "kestra_execution_id": "{{ execution.id }}"
+        }
+      }
 
   - id: done_log
     type: io.kestra.plugin.core.log.Log
-    message: "Done {{ flow.id }} execution={{ execution.id }} state={{ execution.state.current }}"
+    message: "GitHub Actions dispatch requested."

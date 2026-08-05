@@ -3,14 +3,16 @@
   "version": "1.0.0",
   "description": "과학기술정보통신부 공공데이터 수집 파이프라인",
   "private": true,
-  "workspaces": ["datamap-web"],
+  "workspaces": [
+    "datamap-web"
+  ],
   "type": "commonjs",
   "scripts": {
+    "dev": "npm run dev --workspace=datamap-web",
     "crawl": "node crawler/crawler_api_과기부.js",
     "crawl:test": "node crawler/crawler_api_과기부.js --limit 2 --headed",
     "copy-datamap": "node scripts/copy_datamap.js",
-    "deploy": "npm run copy-datamap && npm run build --workspace=datamap-web && wrangler deploy --config datamap-web/wrangler.toml",
-    "subscribe": "node scripts/redis_subscriber.js"
+    "deploy": "npm run copy-datamap && npm run build --workspace=datamap-web && wrangler deploy --config datamap-web/wrangler.jsonc"
   },
   "engines": {
     "node": ">=20.x"

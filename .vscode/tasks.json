@@ -2,51 +2,33 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Python: install dependencies",
+      "label": "Crawler: run",
       "type": "shell",
-      "command": "uv sync",
+      "command": "npm run crawl",
       "problemMatcher": []
     },
     {
-      "label": "Kestra: validate flows",
+      "label": "Datamap: copy to web",
       "type": "shell",
-      "command": "python scripts/validate_flows.py",
+      "command": "npm run copy-datamap",
       "problemMatcher": []
     },
     {
-      "label": "Kestra: deploy flows",
+      "label": "Web: dev",
       "type": "shell",
-      "command": "python scripts/kestra_api.py deploy",
+      "command": "npm run dev",
       "problemMatcher": []
     },
     {
-      "label": "Kestra: run default flow",
+      "label": "Web: build",
       "type": "shell",
-      "command": "python scripts/kestra_api.py run",
+      "command": "npm run build --workspace=datamap-web",
       "problemMatcher": []
     },
     {
-      "label": "Pipeline: run locally",
+      "label": "Cloudflare: deploy",
       "type": "shell",
-      "command": "python src/usecase_pipeline/main.py --project-dir . --input-file 활용사례_자동화_검색.xlsx --dataset-id local-check --run-mode manual",
-      "problemMatcher": []
-    },
-    {
-      "label": "GPT Search: dry run",
-      "type": "shell",
-      "command": "python src/usecase_pipeline/gpt_search.py --project-dir . --input-file 활용사례_자동화_검색.xlsx --mode dry-run --max-rows 10",
-      "problemMatcher": []
-    },
-    {
-      "label": "Browser Search: install browser",
-      "type": "shell",
-      "command": "python -m playwright install chromium",
-      "problemMatcher": []
-    },
-    {
-      "label": "Browser Search: run",
-      "type": "shell",
-      "command": "python src/usecase_pipeline/browser_search.py --project-dir . --input-file 활용사례_자동화_검색.xlsx --max-rows 10 --max-results 5",
+      "command": "npm run deploy",
       "problemMatcher": []
     }
   ]

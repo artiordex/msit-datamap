@@ -3,35 +3,42 @@ run-name: MSIT crawler (${{ github.event.inputs.run_reason || github.event.clien
 
 on:
   schedule:
-    - cron: '0 0 * * 1'  # 매주 월요일 09:00 KST (= UTC 00:00)
-  workflow_dispatch:       # 수동 실행 버튼
+    - cron: '0 12 * * 5' # 매주 금요일 21:00 KST에 실행함
+  workflow_dispatch:
     inputs:
       notify_slack:
-        description: 'Slack incoming webhook으로 실행 결과 알림'
+        description: 'Slack incoming webhook으로 실행 결과를 알림'
         type: boolean
         required: true
         default: true
       publish_pubsub:
-        description: 'Redis Pub/Sub으로 실행 결과 발행'
+        description: 'Redis Pub/Sub으로 실행 결과를 발행'
         type: boolean
         required: true
-        default: false
+        default: true
       run_reason:
         description: '수동 실행 사유'
         type: string
         required: false
         default: 'manual'
-  repository_dispatch:     # 외부 webhook/GitHub API에서 실행
+  repository_dispatch:
     types:
       - msit-weekly-crawl
       - msit-weekly-crawl-webhook
       - msit-weekly-crawl-pubsub
       - slack-msit-weekly-crawl
 
+permissions:
+  contents: read
+
+concurrency:
+  group: weekly-msit-crawler
+  cancel-in-progress: false
+
 jobs:
   crawl:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 360
     env:
       REDIS_URL: ${{ secrets.REDIS_URL }}
       REDIS_CHANNEL: ${{ vars.REDIS_CHANNEL || 'msit:pipeline:events' }}
@@ -47,25 +54,58 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
-      - name: Install Playwright browsers
+      - name: Install Playwright Chromium
         run: npx playwright install chromium --with-deps
 
       - name: Run crawler
-        run: node crawler/crawler_api_과기부.js --fresh --output crawler/data_go_kr/datamap.json
+        run: node crawler/crawler_api_과기부.js --fresh
 
-      - name: Copy latest datamap to public
+      - name: Copy latest datamap to web public
         run: node scripts/copy_datamap.js
+
+      - name: Build web app
+        run: npm run build --workspace=datamap-web
+
+      - name: Deploy to Cloudflare
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "CLOUDFLARE_API_TOKEN secret is not set; skip Cloudflare deploy."
+            exit 0
+          fi
+          npx wrangler deploy --config datamap-web/wrangler.jsonc
 
       - name: Summarize datamap
         if: always()
         run: |
-          node -e "const fs=require('fs');const p='crawler/data_go_kr/datamap.json';if(!fs.existsSync(p)){process.exit(0)}const data=JSON.parse(fs.readFileSync(p,'utf8'));const orgs=data.organizations||[];const file=orgs.reduce((n,o)=>n+(o.file||[]).length,0);const api=orgs.reduce((n,o)=>n+(o.api||[]).length,0);const errors=orgs.reduce((n,o)=>n+(o.errors||[]).length,0);fs.appendFileSync(process.env.GITHUB_ENV,`DATAMAP_ORGS=${orgs.length}\nDATAMAP_FILE=${file}\nDATAMAP_API=${api}\nDATAMAP_ERRORS=${errors}\n`);"
+          node - <<'NODE'
+          const fs = require('fs');
+          const p = 'crawler/datamap.json';
+          if (!fs.existsSync(p)) process.exit(0);
+          const data = JSON.parse(fs.readFileSync(p, 'utf8'));
+          const orgs = Array.isArray(data.organizations) ? data.organizations : [];
+          const datasets = orgs.flatMap((org) => Array.isArray(org.datasets) ? org.datasets : []);
+          const file = datasets.filter((item) => item['유형'] === '파일데이터').length;
+          const api = datasets.filter((item) => item['유형'] === 'API').length;
+          const hybrid = datasets.filter((item) => item['유형'] === 'API/파일데이터').length;
+          const errors = orgs.reduce((n, org) => n + (Array.isArray(org.errors) ? org.errors.length : 0), 0);
+          fs.appendFileSync(process.env.GITHUB_ENV, [
+            `DATAMAP_ORGS=${orgs.length}`,
+            `DATAMAP_FILE=${file}`,
+            `DATAMAP_API=${api}`,
+            `DATAMAP_HYBRID=${hybrid}`,
+            `DATAMAP_ERRORS=${errors}`,
+            '',
+          ].join('\n'));
+          NODE
 
       - name: Upload datamap artifact
         if: always()
@@ -73,8 +113,10 @@ jobs:
         with:
           name: msit-datamap-${{ github.run_id }}
           path: |
-            crawler/data_go_kr/datamap.json
+            crawler/datamap.json
+            crawler/datamap_*.json
             datamap-web/public/data/datamap.json
+            datamap-web/dist
           if-no-files-found: warn
 
       - name: Publish Pub/Sub event (success)
@@ -107,6 +149,8 @@ jobs:
 
       - name: Notify Slack (success)
         if: success() && env.NOTIFY_SLACK == 'true'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
           if [ -z "$SLACK_WEBHOOK_URL" ]; then
             echo "SLACK_WEBHOOK_URL secret is not set; skip Slack notification."
@@ -114,12 +158,12 @@ jobs:
           fi
           curl -s -X POST "$SLACK_WEBHOOK_URL" \
             -H 'Content-Type: application/json' \
-            -d "{\"text\": \":large_green_circle: *weekly-crawl* 완료\\n실행방식: \`${RUN_SOURCE}\`\\n사유: \`${RUN_REASON}\`\\n기관: \`${DATAMAP_ORGS:-0}\`, FILE: \`${DATAMAP_FILE:-0}\`, API: \`${DATAMAP_API:-0}\`, errors: \`${DATAMAP_ERRORS:-0}\`\\n실행ID: \`${{ github.run_id }}\`\\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|GitHub Actions에서 보기>\"}"
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+            -d "{\"text\": \":large_green_circle: *weekly-crawl* 완료\\n실행방식: \`${RUN_SOURCE}\`\\n사유: \`${RUN_REASON}\`\\n기관: \`${DATAMAP_ORGS:-0}\`, 파일: \`${DATAMAP_FILE:-0}\`, API: \`${DATAMAP_API:-0}\`, API/파일: \`${DATAMAP_HYBRID:-0}\`, errors: \`${DATAMAP_ERRORS:-0}\`\\n실행ID: \`${{ github.run_id }}\`\\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|GitHub Actions에서 보기>\"}"
 
       - name: Notify Slack (failure)
         if: failure() && env.NOTIFY_SLACK == 'true'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
           if [ -z "$SLACK_WEBHOOK_URL" ]; then
             echo "SLACK_WEBHOOK_URL secret is not set; skip Slack notification."
@@ -127,6 +171,4 @@ jobs:
           fi
           curl -s -X POST "$SLACK_WEBHOOK_URL" \
             -H 'Content-Type: application/json' \
-            -d "{\"text\": \":red_circle: *weekly-crawl* 실패\\n실행방식: \`${RUN_SOURCE}\`\\n사유: \`${RUN_REASON}\`\\n기관: \`${DATAMAP_ORGS:-0}\`, FILE: \`${DATAMAP_FILE:-0}\`, API: \`${DATAMAP_API:-0}\`, errors: \`${DATAMAP_ERRORS:-0}\`\\n실행ID: \`${{ github.run_id }}\`\\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|로그 보기>\"}"
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+            -d "{\"text\": \":red_circle: *weekly-crawl* 실패\\n실행방식: \`${RUN_SOURCE}\`\\n사유: \`${RUN_REASON}\`\\n기관: \`${DATAMAP_ORGS:-0}\`, 파일: \`${DATAMAP_FILE:-0}\`, API: \`${DATAMAP_API:-0}\`, API/파일: \`${DATAMAP_HYBRID:-0}\`, errors: \`${DATAMAP_ERRORS:-0}\`\\n실행ID: \`${{ github.run_id }}\`\\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|로그 보기>\"}"

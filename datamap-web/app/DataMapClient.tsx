@@ -11,7 +11,7 @@ import {
 
 type KindFilter = "all" | DatasetKind;
 type SortKey = "views" | "downloads" | "applications" | "name";
-type DatasetKind = "file" | "api";
+type DatasetKind = "file" | "api" | "hybrid";
 
 type NamedCount = {
   name: string;
@@ -20,10 +20,22 @@ type NamedCount = {
 
 // ── 크롤러 raw 타입 ──────────────────────────────────────────────────────────
 
+type RawDetail = Record<string, string | undefined>;
+type RawTypeDetails = Record<string, RawDetail | undefined>;
+
 type RawItem = {
-  href: string;
-  title: string;
-  type: "FILE" | "API";
+  [key: string]: unknown;
+  href?: string;
+  title?: string;
+  type?: "FILE" | "API" | string;
+  "링크"?: string;
+  "제목"?: string;
+  "유형"?: string;
+  "전체 유형"?: string;
+  "수집 탭"?: string;
+  "제공 탭"?: string;
+  "목록 제공형식"?: string;
+  "유형별 상세"?: RawTypeDetails;
   "파일데이터명"?: string;
   "오픈API명"?: string;
   "분류체계"?: string;
@@ -66,6 +78,9 @@ type RawDatamap = {
 type DatasetRecord = {
   id: string;
   kind: DatasetKind;
+  portalPath: string;
+  fileHref: string;
+  apiHref: string;
   name: string;        // 기관명_ 제거한 데이터명
   원본제목: string;
   분류체계: string;    // "과학기술 - 과학기술진흥"
@@ -94,12 +109,25 @@ const catalogUrl = "/data/datamap.json";
 
 // ── raw → DatasetRecord 변환 ─────────────────────────────────────────────────
 
-function parseKorNum(s: string | undefined): number {
-  return parseInt((s ?? "").replace(/[^\d]/g, ""), 10) || 0;
+function cleanText(value: unknown) {
+  if (value === undefined || value === null) return "";
+  return String(value).replace(/\s+/g, " ").trim();
 }
 
-function parseKeywords(s: string | undefined): string[] {
-  return (s ?? "").split(",").map((k) => k.trim()).filter(Boolean);
+function firstText(...values: unknown[]) {
+  for (const value of values) {
+    const cleaned = cleanText(value);
+    if (cleaned) return cleaned;
+  }
+  return "";
+}
+
+function parseKorNum(value: unknown): number {
+  return parseInt(cleanText(value).replace(/[^\d]/g, ""), 10) || 0;
+}
+
+function parseKeywords(value: unknown): string[] {
+  return cleanText(value).split(",").map((k) => k.trim()).filter(Boolean);
 }
 
 function extractName(title: string): string {
@@ -111,62 +139,195 @@ function extractId(href: string): string {
   return href.match(/\/data\/(\d+)\//)?.[1] ?? href;
 }
 
-function cleanText(value: string | undefined) {
-  return (value ?? "").replace(/\s+/g, " ").trim();
-}
-
 function normalizeProviderName(name: string) {
   const normalized = cleanText(name);
   const prefix = "과학기술정보통신부 ";
   return normalized.startsWith(prefix) ? normalized.slice(prefix.length).trim() : normalized;
 }
 
-function toRecord(item: RawItem, orgName: string): DatasetRecord {
+function normalizeDatasetKind(value: unknown): DatasetKind | "" {
+  const text = cleanText(value).replace(/\s+/g, "");
+  if (!text) return "";
+  if (text.includes("API") && (text.includes("파일") || text.includes("FILE"))) return "hybrid";
+  if (text === "API" || text.includes("오픈API")) return "api";
+  if (text === "FILE" || text.includes("파일데이터")) return "file";
+  return "";
+}
+
+function rawItemKind(item: RawItem): DatasetKind {
+  return (
+    normalizeDatasetKind(item["전체 유형"]) ||
+    normalizeDatasetKind(item["제공 탭"]) ||
+    normalizeDatasetKind(item["유형"]) ||
+    normalizeDatasetKind(item.type) ||
+    "file"
+  );
+}
+
+function sourceTypeLabel(item: RawItem) {
+  const sourceKind =
+    normalizeDatasetKind(item.type) ||
+    normalizeDatasetKind(item["수집 탭"]) ||
+    rawItemKind(item);
+  return sourceKind === "api"
+    ? "API"
+    : "파일데이터";
+}
+
+function typedDetail(item: RawItem, label: "파일데이터" | "API"): RawDetail {
+  const details = item["유형별 상세"];
+  if (!details) return {};
+  return details[label] ?? (label === "API" ? details["오픈 API"] : details.FILE) ?? {};
+}
+
+function detailValue(item: RawItem, detail: RawDetail, key: string) {
+  return firstText(detail[key], item[key]);
+}
+
+function splitDelimited(value: unknown) {
+  return cleanText(value)
+    .split(/,|\s+\+\s+|\//)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function uniqueStrings(values: string[]) {
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
+}
+
+function combineDelimited(...values: unknown[]) {
+  return uniqueStrings(values.flatMap(splitDelimited)).join(", ");
+}
+
+function hrefForType(href: string, id: string, kind: "file" | "api") {
+  const page = kind === "api" ? "openapi.do" : "fileData.do";
+  if (href) return href.replace(/\/(?:fileData|openapi)\.do$/, `/${page}`);
+  return id ? `/data/${id}/${page}` : "";
+}
+
+function mergeKind(left: DatasetKind, right: DatasetKind): DatasetKind {
+  if (left === right) return left;
+  return "hybrid";
+}
+
+function mergeRecord(left: DatasetRecord, right: DatasetRecord): DatasetRecord {
+  const kind = mergeKind(left.kind, right.kind);
+  const fileHref = firstText(left.fileHref, right.fileHref);
+  const apiHref = firstText(left.apiHref, right.apiHref);
+  const portalPath = kind === "api" ? firstText(apiHref, left.portalPath, right.portalPath) : firstText(fileHref, left.portalPath, right.portalPath, apiHref);
+
   return {
-    id: extractId(item.href),
-    kind: item.type === "API" ? "api" : "file",
-    name: extractName(item.title),
-    원본제목: item.title,
-    분류체계: item["분류체계"] ?? "",
-    제공기관: normalizeProviderName(item["제공기관"] ?? orgName),
-    관리부서명: item["관리부서명"] ?? "",
-    관리부서전화: item["관리부서 전화번호"] ?? "",
-    업데이트주기: item["업데이트 주기"] ?? "",
-    차기등록예정일: item["차기 등록 예정일"] ?? "",
-    설명: item["설명"] ?? "",
-    매체유형: item["매체유형"] ?? "",
-    확장자: item["확장자"] ?? "",
-    전체행: parseKorNum(item["전체 행"]),
-    키워드: parseKeywords(item["키워드"]),
-    등록일: item["등록일"] ?? "",
-    수정일: item["수정일"] ?? "",
-    조회수: parseKorNum(item["조회수"]),
-    다운로드수: parseKorNum(item["다운로드(바로가기)"]),
-    활용신청수: parseKorNum(item["활용신청"]),
-    보유근거: item["보유근거"] ?? "",
-    수집방법: item["수집방법"] ?? "",
-    데이터한계: item["데이터 한계"] ?? "",
-    기타유의사항: item["기타 유의사항"] ?? "",
+    id: firstText(left.id, right.id),
+    kind,
+    portalPath,
+    fileHref,
+    apiHref,
+    name: firstText(left.name, right.name),
+    원본제목: firstText(left.원본제목, right.원본제목),
+    분류체계: firstText(left.분류체계, right.분류체계),
+    제공기관: firstText(left.제공기관, right.제공기관),
+    관리부서명: firstText(left.관리부서명, right.관리부서명),
+    관리부서전화: firstText(left.관리부서전화, right.관리부서전화),
+    업데이트주기: firstText(left.업데이트주기, right.업데이트주기),
+    차기등록예정일: firstText(left.차기등록예정일, right.차기등록예정일),
+    설명: firstText(left.설명, right.설명),
+    매체유형: combineDelimited(left.매체유형, right.매체유형),
+    확장자: combineDelimited(left.확장자, right.확장자),
+    전체행: Math.max(left.전체행, right.전체행),
+    키워드: uniqueStrings([...left.키워드, ...right.키워드]),
+    등록일: firstText(left.등록일, right.등록일),
+    수정일: firstText(left.수정일, right.수정일),
+    조회수: Math.max(left.조회수, right.조회수),
+    다운로드수: Math.max(left.다운로드수, right.다운로드수),
+    활용신청수: Math.max(left.활용신청수, right.활용신청수),
+    보유근거: firstText(left.보유근거, right.보유근거),
+    수집방법: firstText(left.수집방법, right.수집방법),
+    데이터한계: firstText(left.데이터한계, right.데이터한계),
+    기타유의사항: firstText(left.기타유의사항, right.기타유의사항),
+  };
+}
+
+function toRecord(item: RawItem, orgName: string): DatasetRecord {
+  const kind = rawItemKind(item);
+  const href = firstText(item.href, item["링크"]);
+  const id = extractId(href);
+  const sourceDetail = typedDetail(item, sourceTypeLabel(item));
+  const fileDetail = typedDetail(item, "파일데이터");
+  const apiDetail = typedDetail(item, "API");
+  const read = (key: string) => detailValue(item, sourceDetail, key);
+  const fileHref = kind === "api" ? "" : hrefForType(href, id, "file");
+  const apiHref = kind === "file" ? "" : hrefForType(href, id, "api");
+  const title = firstText(
+    item.title,
+    item["제목"],
+    fileDetail["파일데이터명"],
+    apiDetail["오픈API명"],
+    item["파일데이터명"],
+    item["오픈API명"],
+  );
+  const nameSource = firstText(item.title, item["제목"], title);
+
+  return {
+    id,
+    kind,
+    portalPath: kind === "api" ? apiHref || href : fileHref || apiHref || href,
+    fileHref,
+    apiHref,
+    name: extractName(nameSource || title),
+    원본제목: title,
+    분류체계: read("분류체계"),
+    제공기관: normalizeProviderName(firstText(read("제공기관"), orgName)),
+    관리부서명: read("관리부서명"),
+    관리부서전화: read("관리부서 전화번호"),
+    업데이트주기: read("업데이트 주기"),
+    차기등록예정일: read("차기 등록 예정일"),
+    설명: read("설명"),
+    매체유형: combineDelimited(fileDetail["매체유형"], apiDetail["매체유형"], read("매체유형")),
+    확장자: combineDelimited(fileDetail["확장자"], apiDetail["확장자"], read("확장자")),
+    전체행: parseKorNum(firstText(fileDetail["전체 행"], read("전체 행"))),
+    키워드: uniqueStrings([
+      ...parseKeywords(fileDetail["키워드"]),
+      ...parseKeywords(apiDetail["키워드"]),
+      ...parseKeywords(read("키워드")),
+    ]),
+    등록일: read("등록일"),
+    수정일: read("수정일"),
+    조회수: parseKorNum(read("조회수")),
+    다운로드수: parseKorNum(firstText(fileDetail["다운로드(바로가기)"], read("다운로드(바로가기)"))),
+    활용신청수: parseKorNum(firstText(apiDetail["활용신청"], read("활용신청"))),
+    보유근거: read("보유근거"),
+    수집방법: read("수집방법"),
+    데이터한계: read("데이터 한계"),
+    기타유의사항: read("기타 유의사항"),
   };
 }
 
 function datamapToRecords(raw: RawDatamap): DatasetRecord[] {
-  const records: DatasetRecord[] = [];
+  const recordsById = new Map<string, DatasetRecord>();
   for (const org of raw.organizations) {
     for (const item of org.file) {
-      if (!item.error) records.push(toRecord(item, org.org));
+      if (!item.error) {
+        const record = toRecord(item, org.org);
+        const key = record.id || `${org.org}-${record.portalPath}-${record.name}`;
+        recordsById.set(key, recordsById.has(key) ? mergeRecord(recordsById.get(key)!, record) : record);
+      }
     }
     for (const item of org.api) {
-      if (!item.error) records.push(toRecord(item, org.org));
+      if (!item.error) {
+        const record = toRecord(item, org.org);
+        const key = record.id || `${org.org}-${record.portalPath}-${record.name}`;
+        recordsById.set(key, recordsById.has(key) ? mergeRecord(recordsById.get(key)!, record) : record);
+      }
     }
   }
-  return records;
+  return [...recordsById.values()];
 }
 
 type CatalogSummary = {
   total: number;
   files: number;
   apis: number;
+  hybrids: number;
   views: number;
   downloads: number;
   cumulativeDownloads: number;
@@ -182,6 +343,7 @@ type ThemeStat = {
   count: number;
   files: number;
   apis: number;
+  hybrids: number;
   views: number;
   downloads: number;
   applications: number;
@@ -192,6 +354,7 @@ type ThemeStat = {
 type RecordSummary = Pick<
   ThemeStat,
   "count" | "files" | "apis" | "views" | "downloads" | "applications" | "keywords"
+  | "hybrids"
 >;
 
 type GraphNodeKind = "center" | "level1" | "level2" | "level3" | "record" | "overflow";
@@ -289,12 +452,26 @@ function formatNumber(value: number) {
 }
 
 function dataGoKrUrl(record: DatasetRecord) {
-  const page = record.kind === "api" ? "openapi.do" : "fileData.do";
-  return record.id ? `https://www.data.go.kr/data/${record.id}/${page}` : "";
+  return record.portalPath ? `https://www.data.go.kr${record.portalPath}` : "";
 }
 
 function kindDisplay(record: DatasetRecord) {
-  return record.kind === "api" ? "Open API" : "파일데이터";
+  if (record.kind === "hybrid") return "API/파일데이터";
+  return record.kind === "api" ? "API" : "파일데이터";
+}
+
+function kindBadgeLabel(record: DatasetRecord) {
+  if (record.kind === "hybrid") return "API/파일";
+  return record.kind === "api" ? "API" : "파일";
+}
+
+function kindColor(record: DatasetRecord) {
+  if (record.kind === "hybrid") return "#0f766e";
+  return record.kind === "api" ? "#2563eb" : "#4f7fe5";
+}
+
+function matchesKindFilter(record: DatasetRecord, kind: KindFilter) {
+  return kind === "all" || record.kind === kind;
 }
 
 function formatRecordValue(value: unknown) {
@@ -320,7 +497,7 @@ function recordInfoRows(record: DatasetRecord) {
     { label: "갱신주기", value: record.업데이트주기 },
     { label: "차기 등록 예정일", value: record.차기등록예정일 },
     { label: "매체유형", value: record.매체유형 },
-    ...(record.kind === "file" ? [{ label: "전체 행", value: record.전체행 }] : []),
+    ...(record.kind !== "api" ? [{ label: "전체 행", value: record.전체행 }] : []),
     { label: "키워드", value: record.키워드 },
     { label: "등록일", value: record.등록일 },
     { label: "수정일", value: record.수정일 },
@@ -457,11 +634,16 @@ function countBy(values: string[]) {
     .map(([name, count]) => ({ name, count }));
 }
 
+function keywordPopularityScore(record: DatasetRecord) {
+  return Math.max(record.다운로드수 + record.활용신청수, 1);
+}
+
 function keywordCounts(records: DatasetRecord[], limit: number) {
   const counts = new Map<string, number>();
   for (const record of records) {
+    const score = keywordPopularityScore(record);
     for (const keyword of record.키워드) {
-      counts.set(keyword, (counts.get(keyword) ?? 0) + 1);
+      counts.set(keyword, (counts.get(keyword) ?? 0) + score);
     }
   }
 
@@ -475,12 +657,12 @@ function topKeywords(records: DatasetRecord[]) {
   return keywordCounts(records, 6).map(({ name }) => name);
 }
 
-function topKeywordsFromHighViewRecords(records: DatasetRecord[], limit = 20) {
+function topKeywordsFromPopularRecords(records: DatasetRecord[], limit = 20) {
   const keywords: string[] = [];
   const seen = new Set<string>();
 
   const rankedRecords = [...records].sort(
-    (a, b) => b.조회수 - a.조회수 || a.name.localeCompare(b.name, "ko-KR"),
+    (a, b) => keywordPopularityScore(b) - keywordPopularityScore(a) || a.name.localeCompare(b.name, "ko-KR"),
   );
 
   for (const record of rankedRecords) {
@@ -502,6 +684,7 @@ function summarizeCatalog(records: DatasetRecord[]): CatalogSummary {
     total: records.length,
     files: records.filter((record) => record.kind === "file").length,
     apis: records.filter((record) => record.kind === "api").length,
+    hybrids: records.filter((record) => record.kind === "hybrid").length,
     views: records.reduce((sum, record) => sum + record.조회수, 0),
     downloads: records.reduce((sum, record) => sum + record.다운로드수, 0),
     cumulativeDownloads: 0,
@@ -518,6 +701,7 @@ function summarizeRecords(records: DatasetRecord[]): RecordSummary {
     count: records.length,
     files: records.filter((record) => record.kind === "file").length,
     apis: records.filter((record) => record.kind === "api").length,
+    hybrids: records.filter((record) => record.kind === "hybrid").length,
     views: records.reduce((sum, record) => sum + record.조회수, 0),
     downloads: records.reduce((sum, record) => sum + record.다운로드수, 0),
     applications: records.reduce((sum, record) => sum + record.활용신청수, 0),
@@ -529,7 +713,7 @@ function summaryTooltip(label: string, summary: RecordSummary) {
   return [
     label,
     `데이터 ${formatNumber(summary.count)}건`,
-    `파일 ${formatNumber(summary.files)} · API ${formatNumber(summary.apis)}`,
+    `파일 ${formatNumber(summary.files)} · API ${formatNumber(summary.apis)} · API/파일 ${formatNumber(summary.hybrids)}`,
     summary.keywords.length ? `대표 키워드 ${summary.keywords.join(", ")}` : "",
   ]
     .filter(Boolean)
@@ -1659,7 +1843,7 @@ export function DataMapClient() {
     const nextRecord = params.get("record") ?? "";
 
     setQuery(params.get("q") ?? "");
-    if (nextKind === "api" || nextKind === "file" || nextKind === "all") {
+    if (nextKind === "api" || nextKind === "file" || nextKind === "hybrid" || nextKind === "all") {
       setActiveKind(nextKind);
     }
     setSelectedOrgs(nextOrg.split(",").map((org) => org.trim()).filter(Boolean));
@@ -1694,7 +1878,7 @@ export function DataMapClient() {
 
   const baseRecords = useMemo(() => {
     return datasets.filter((record) => {
-      const kindMatch = activeKind === "all" || record.kind === activeKind;
+      const kindMatch = matchesKindFilter(record, activeKind);
       const orgMatch = selectedOrgs.length === 0 || selectedOrgs.includes(record.제공기관);
       return kindMatch && orgMatch && matchesDataMapSearch(record, query);
     });
@@ -1820,6 +2004,7 @@ export function DataMapClient() {
       total: baseRecords.length,
       files: baseRecords.filter((record) => record.kind === "file").length,
       apis: baseRecords.filter((record) => record.kind === "api").length,
+      hybrids: baseRecords.filter((record) => record.kind === "hybrid").length,
     };
   }, [baseRecords]);
 
@@ -1828,13 +2013,13 @@ export function DataMapClient() {
     : palette[0];
   const keywordSourceRecords = useMemo(() => {
     return datasets.filter((record) => {
-      const kindMatch = activeKind === "all" || record.kind === activeKind;
+      const kindMatch = matchesKindFilter(record, activeKind);
       const orgMatch = selectedOrgs.length === 0 || selectedOrgs.includes(record.제공기관);
       return kindMatch && orgMatch;
     });
   }, [activeKind, datasets, selectedOrgs]);
   const keywordOptions = useMemo(
-    () => topKeywordsFromHighViewRecords(keywordSourceRecords, 20),
+    () => topKeywordsFromPopularRecords(keywordSourceRecords, 20),
     [keywordSourceRecords],
   );
 
@@ -1856,7 +2041,7 @@ export function DataMapClient() {
       tooltip: [
         query.trim() || "데이터현황",
         `데이터 ${formatNumber(visibleTotals.total)}건`,
-        `파일 ${formatNumber(visibleTotals.files)} · API ${formatNumber(visibleTotals.apis)}`,
+        `파일 ${formatNumber(visibleTotals.files)} · API ${formatNumber(visibleTotals.apis)} · API/파일 ${formatNumber(visibleTotals.hybrids)}`,
       ].join("\n"),
     };
     const level1Items: GraphItem[] = themeStats.map((stat) => ({
@@ -1942,7 +2127,7 @@ export function DataMapClient() {
             id: `record-${record.id}`,
             kind: "record",
             label: record.name,
-            countLabel: record.kind === "api" ? "API" : record.확장자 || "FILE",
+            countLabel: record.kind === "file" ? record.확장자 || "FILE" : kindBadgeLabel(record),
             color: dotColor,
             radius: recordDotRadius,
             tooltip: recordTooltip(record),
@@ -1986,6 +2171,7 @@ export function DataMapClient() {
     themeOrder,
     visibleTotals.apis,
     visibleTotals.files,
+    visibleTotals.hybrids,
     visibleTotals.total,
   ]);
 
@@ -2071,7 +2257,7 @@ export function DataMapClient() {
   function applyTerm(term: string) {
     const nextRecords = datasets.filter(
       (record) => {
-        const kindMatch = activeKind === "all" || record.kind === activeKind;
+        const kindMatch = matchesKindFilter(record, activeKind);
         const orgMatch = selectedOrgs.length === 0 || selectedOrgs.includes(record.제공기관);
         return kindMatch && orgMatch && matchesDataMapSearch(record, term);
       },
@@ -2284,6 +2470,7 @@ export function DataMapClient() {
                 <option value="all">전체 유형</option>
                 <option value="api">API</option>
                 <option value="file">파일데이터</option>
+                <option value="hybrid">API/파일데이터</option>
               </select>
             </label>
             <div className="org-filter" ref={orgFilterRef}>
@@ -2489,6 +2676,7 @@ export function DataMapClient() {
                       <span>데이터 {formatNumber(currentScopeSummary.count)}</span>
                       <span>파일 {formatNumber(currentScopeSummary.files)}</span>
                       <span>API {formatNumber(currentScopeSummary.apis)}</span>
+                      <span>API/파일 {formatNumber(currentScopeSummary.hybrids)}</span>
                     </div>
                     <ol className="dataset-list">
                       {visibleDetailRecords.map((record, index) => (
@@ -2504,13 +2692,16 @@ export function DataMapClient() {
                                   "--item-color":
                                 nodeColorMap.get(selectedCategoryLevel2) ??
                                 nodeColorMap.get(level1Label(record)) ??
-                                (record.kind === "api" ? "#2563eb" : "#4f7fe5"),
+                                kindColor(record),
                                 } as CSSProperties
                               }
                               aria-hidden="true"
                             />
                             <span className="dataset-name">
                               {highlightSearchTerm(record.name, detailQuery)}
+                            </span>
+                            <span className={`dataset-kind-badge ${record.kind}`}>
+                              {kindBadgeLabel(record)}
                             </span>
                           </button>
                         </li>
@@ -2577,7 +2768,8 @@ export function DataMapClient() {
         </span>
         <span>
           현재 표시 {formatNumber(visibleTotals.total)}건 · 파일{" "}
-          {formatNumber(visibleTotals.files)} · API {formatNumber(visibleTotals.apis)}
+          {formatNumber(visibleTotals.files)} · API {formatNumber(visibleTotals.apis)} · API/파일{" "}
+          {formatNumber(visibleTotals.hybrids)}
         </span>
       </footer>
     </main>

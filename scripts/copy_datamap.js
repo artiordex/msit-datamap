@@ -11,7 +11,7 @@ const fs = require("fs");
 const path = require("path");
 
 const ROOT = path.resolve(__dirname, "..");
-const DATA_DIR = path.join(ROOT, "crawler", "data_go_kr");
+const CRAWLER_DIR = path.join(ROOT, "crawler");
 const DEST = path.join(ROOT, "datamap-web", "public", "data", "datamap.json");
 
 function findNewestDatedDatamap(dir) {
@@ -25,10 +25,8 @@ function findNewestDatedDatamap(dir) {
 }
 
 const candidates = [
-  path.join(DATA_DIR, "datamap.json"),
-  findNewestDatedDatamap(DATA_DIR),
-  path.join(ROOT, "crawler", "datamap.json"),
-  findNewestDatedDatamap(path.join(ROOT, "crawler")),
+  path.join(CRAWLER_DIR, "datamap.json"),
+  findNewestDatedDatamap(CRAWLER_DIR),
 ].filter(Boolean);
 
 const src = candidates.find((file) => fs.existsSync(file));

@@ -4,7 +4,7 @@
  * 과학기술정보통신부 산하기관 공공데이터 크롤러
  *
  * data.go.kr 에서 53개 기관의 파일데이터 + 오픈API 목록을 수집하여
- * crawler/data_go_kr/datamap_YYMMDD.json 과 최신본 datamap.json 으로 저장
+ * crawler/datamap_YYMMDD.json 과 최신본 datamap.json 으로 저장
  *
  * 사용법:
  *   node crawler/crawler_api_과기부.js
@@ -25,12 +25,15 @@ const logger       = require('../utils/logger');
 
 const BASE_URL   = 'https://www.data.go.kr';
 const LIST_URL   = `${BASE_URL}/tcs/dss/selectDataSetList.do`;
-const OUTPUT_DIR = path.join(__dirname, 'data_go_kr');
+const OUTPUT_DIR = __dirname;
 const TIMEOUT    = 60_000;
 const UA         =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
   '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
-
+const TYPE_LABELS = {
+  FILE: '파일데이터',
+  API: 'API',
+};
 const ORGS = [
   '과학기술정보통신부',
   '우정사업본부',
@@ -87,7 +90,7 @@ const ORGS = [
   '한국핵융합에너지연구원',
 ];
 
-// ── 유틸 ──────────────────────────────────────────────────────────────────────
+// 실행 옵션과 문자열을 정리하는 유틸 함수 영역임
 
 function getArg(name) {
   const i = process.argv.indexOf(name);
@@ -97,6 +100,48 @@ function getArg(name) {
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 function clean(s) { return String(s ?? '').replace(/\s+/g, ' ').trim(); }
+
+function typeLabel(dType) {
+  return TYPE_LABELS[dType] ?? clean(dType);
+}
+
+function normalizeDataTypeLabel(value) {
+  const text = clean(value).replace(/선택됨/g, '');
+  if (/오픈\s*API|OPEN\s*API|\bAPI\b/i.test(text)) return 'API';
+  if (/파일\s*데이터|파일데이터|FILE/i.test(text)) return '파일데이터';
+  return '';
+}
+
+function overallTypeLabel(types) {
+  const normalized = new Set([...types].map(normalizeDataTypeLabel).filter(Boolean));
+  if (normalized.has('API') && normalized.has('파일데이터')) return 'API/파일데이터';
+  if (normalized.has('API')) return 'API';
+  if (normalized.has('파일데이터')) return '파일데이터';
+  return '';
+}
+
+function inferOverallType(dType, detail = {}, cardData = {}) {
+  const types = new Set([typeLabel(dType)]);
+  const addTypes = value => {
+    for (const part of String(value ?? '').split(/[,\n/]+/)) {
+      const normalized = normalizeDataTypeLabel(part);
+      if (normalized) types.add(normalized);
+    }
+  };
+
+  addTypes(detail['유형']);
+  addTypes(cardData['유형']);
+
+  const formats = `${cardData.__formats ?? ''}`;
+  if (/JSON\s*\+\s*XML|XML\s*\+\s*JSON|오픈\s*API|OPEN\s*API/i.test(formats)) {
+    types.add('API');
+  }
+  if (/\b(CSV|XLSX?|PDF|HWP|ZIP|TXT|SHP|DOCX?|PPTX?)\b/i.test(formats)) {
+    types.add('파일데이터');
+  }
+
+  return overallTypeLabel(types) || typeLabel(dType);
+}
 
 function todayStamp() {
   const d = new Date();
@@ -137,6 +182,111 @@ function saveDatamap(outputFile, data) {
   }
 }
 
+function extractDataId(href) {
+  return clean(href).match(/\/data\/(\d+)\//)?.[1] ?? '';
+}
+
+function cacheKey(href, dType) {
+  const normalizedHref = clean(href);
+  if (!normalizedHref) return '';
+  const id = extractDataId(normalizedHref);
+  return id ? `${dType}:${id}` : `${dType}:${normalizedHref}`;
+}
+
+function readJsonFile(file) {
+  try {
+    if (!fs.existsSync(file)) return null;
+    return JSON.parse(fs.readFileSync(file, 'utf-8'));
+  } catch (err) {
+    logger.warn({ file, err: err.message }, '캐시 파일을 읽지 못해 무시함');
+    return null;
+  }
+}
+
+function buildDetailCache(outputFile) {
+  const cache = new Map();
+  const latestFile = latestOutputFileFor(outputFile);
+  const sources = [latestFile, outputFile]
+    .filter((file, index, files) => file && files.indexOf(file) === index)
+    .map(readJsonFile)
+    .filter(Boolean);
+
+  const remember = (item, dType) => {
+    const key = cacheKey(item['링크'] ?? item.href, dType);
+    if (!key) return;
+    if (isReusableCachedItem(item) || !cache.has(key)) cache.set(key, item);
+  };
+
+  for (const source of sources) {
+    for (const org of source.organizations ?? []) {
+      for (const item of org.file ?? []) {
+        remember(item, 'FILE');
+      }
+      for (const item of org.api ?? []) {
+        remember(item, 'API');
+      }
+    }
+  }
+
+  return cache;
+}
+
+function typedDetailLabel(dType) {
+  return typeLabel(dType);
+}
+
+function cachedRevision(item, dType) {
+  const detail = item?.['유형별 상세']?.[typedDetailLabel(dType)];
+  return clean(detail?.['수정일'] ?? item?.['수정일']);
+}
+
+function isReusableCachedItem(item) {
+  if (!item) return false;
+  if ('href' in item || 'title' in item || 'type' in item) return false;
+  if ('전체 유형' in item || '목록 제공형식' in item || '수집 탭' in item) return false;
+  const type = clean(item['유형']);
+  if (type !== 'API/파일데이터' && item['유형별 상세']) return false;
+  return true;
+}
+
+function cleanMetric(value) {
+  return clean(value).replace(/건$/, '').trim();
+}
+
+function cloneJson(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function updateCachedMetrics(cachedItem, link, dType, cardData) {
+  const item = cloneJson(cachedItem);
+  item['링크'] = link['링크'];
+  item['제목'] = link['제목'];
+  item['유형'] = link['유형'];
+
+  const views = clean(cardData['조회수']);
+  const modified = clean(cardData['수정일']);
+  if (views) item['조회수'] = views;
+
+  const detailLabel = typedDetailLabel(dType);
+  const detail = item['유형별 상세']?.[detailLabel];
+  if (detail && modified) detail['수정일'] = modified;
+  if (!detail && modified) item['수정일'] = modified;
+
+  if (dType === 'FILE') {
+    const downloads = cleanMetric(cardData['다운로드']);
+    if (detail && downloads) detail['다운로드(바로가기)'] = downloads;
+    if (!detail && downloads) item['다운로드(바로가기)'] = downloads;
+  }
+
+  if (dType === 'API') {
+    const applications = cleanMetric(cardData['활용신청']);
+    if (detail && applications) detail['활용신청'] = applications;
+    if (!detail && applications) item['활용신청'] = applications;
+  }
+
+  return item;
+}
+
 function isHeaded() { return process.argv.includes('--headed'); }
 
 function slowMoMs() {
@@ -169,11 +319,9 @@ async function fetchHtml(url, cookie, retries = 3) {
   }
 }
 
-function parseDetailPage(html) {
-  const $ = cheerio.load(html);
-  $('script, style').remove();
+function extractInfoList($, root) {
   const record = {};
-  $('.line-box.type2 .info-ul li').each((_, el) => {
+  root.find('.line-box.type2 .info-ul li').each((_, el) => {
     const key = clean($(el).children('strong.key').first().text());
     const val = clean($(el).children('.value').first().text());
     if (key) record[key] = val;
@@ -181,7 +329,116 @@ function parseDetailPage(html) {
   return record;
 }
 
-// ── Playwright 헬퍼 ──────────────────────────────────────────────────────────
+function extractReportAfterTitle($, titlePattern) {
+  const title = $('.data-info-tit, .data-info-title, h3, h4')
+    .filter((_, el) => titlePattern.test(clean($(el).text())))
+    .first();
+  if (!title.length) return {};
+
+  const report = title.nextAll('.data-report').first();
+  return report.length ? extractInfoList($, report) : {};
+}
+
+function extractLicenseInfo($) {
+  return extractReportAfterTitle($, /이용\s*조건|라이선스/);
+}
+
+function findDetailRoot($, dType) {
+  const panelId = dType === 'FILE' ? '#dataTabpanel01' : '#dataTabpanel02';
+  const panel = $(panelId).first();
+  if (panel.length) return panel;
+
+  const titleKey = dType === 'FILE' ? '파일데이터명' : '오픈API명';
+  const report = $('.data-report')
+    .filter((_, el) => clean($(el).text()).includes(titleKey))
+    .first();
+  if (report.length) {
+    const parentPanel = report.closest('[id^="dataTabpanel"], [role="tabpanel"]');
+    return parentPanel.length ? parentPanel : report.add(report.nextAll('.data-report'));
+  }
+
+  return $.root();
+}
+
+function availableDetailTypes($) {
+  const types = new Set();
+
+  $('[role="tab"]').each((_, el) => {
+    const normalized = normalizeDataTypeLabel($(el).text());
+    const panelId = $(el).attr('aria-controls');
+    if (panelId && $(`#${panelId}`).find('.info-ul li').length === 0) return;
+    if (normalized) types.add(normalized);
+  });
+
+  $('strong.key').each((_, el) => {
+    const key = clean($(el).text());
+    if (key === '파일데이터명') types.add('파일데이터');
+    if (key === '오픈API명') types.add('API');
+  });
+
+  return [...types];
+}
+
+function parseTypedDetails($, availableTypes, sharedInfo = {}) {
+  const details = {};
+  for (const dType of ['FILE', 'API']) {
+    if (!availableTypes.includes(typeLabel(dType))) continue;
+    const root = findDetailRoot($, dType);
+    const record = { ...extractInfoList($, root), ...sharedInfo };
+    if (Object.keys(record).length > 0) details[typeLabel(dType)] = record;
+  }
+  return details;
+}
+
+function parseDetailPage(html, dType) {
+  const $ = cheerio.load(html);
+  $('script, style').remove();
+
+  const root = findDetailRoot($, dType);
+  const licenseInfo = extractLicenseInfo($);
+  const record = { ...extractInfoList($, root), ...licenseInfo };
+  if (Object.keys(record).length === 0) {
+    Object.assign(record, extractInfoList($, $.root()), licenseInfo);
+  }
+
+  const types = availableDetailTypes($);
+  if (!types.length) types.push(typeLabel(dType));
+
+  const typedDetails = parseTypedDetails($, types, licenseInfo);
+  if (Object.keys(typedDetails).length > 0) {
+    record['유형별 상세'] = typedDetails;
+  }
+
+  return record;
+}
+
+function buildOutputRecord({ href, title, dType, cardData, detail, error }) {
+  const type = inferOverallType(dType, detail, { __formats: cardData.__formats, 유형: cardData['유형'] });
+  const output = {
+    링크: href,
+    제목: clean(title),
+    유형: type,
+  };
+
+  if (type === 'API/파일데이터') {
+    const views = clean(cardData['조회수'] ?? detail['조회수']);
+    const category = clean(detail['분류체계']);
+    if (views) output['조회수'] = views;
+    if (category) output['분류체계'] = category;
+    if (detail['유형별 상세']) output['유형별 상세'] = detail['유형별 상세'];
+  } else {
+    const { '유형별 상세': _typedDetails, ...flatDetail } = detail;
+    Object.assign(output, flatDetail);
+    const views = clean(cardData['조회수'] ?? output['조회수']);
+    if (views) output['조회수'] = views;
+  }
+
+  if (error) output.error = error;
+
+  return output;
+}
+
+// 브라우저 화면에서 버튼을 누르고 검색 조건을 맞추는 함수 영역임
 
 async function closeHomePopups(page) {
   const closeSelectors = [
@@ -199,6 +456,7 @@ async function closeHomePopups(page) {
     for (let i = 0; i < count; i++) {
       const button = buttons.nth(i);
       if (await button.isVisible({ timeout: 500 }).catch(() => false)) {
+        // 홈 화면 팝업의 오늘 하루 보지 않기 또는 닫기 버튼을 누름
         await button.click({ force: true }).catch(() => null);
         await sleep(150);
       }
@@ -213,6 +471,7 @@ async function goToDataSetList(page) {
 
   const menuButton = page.locator('button[data-trigger="gnb"]').first();
   if (await menuButton.isVisible({ timeout: 3000 }).catch(() => false)) {
+    // 상단 전체 메뉴 버튼을 누름
     await menuButton.click({ force: true }).catch(() => null);
     await waitUi(300);
   }
@@ -221,6 +480,7 @@ async function goToDataSetList(page) {
   if (await dataListLink.isVisible({ timeout: 3000 }).catch(() => false)) {
     await Promise.all([
       page.waitForLoadState('domcontentloaded').catch(() => null),
+      // 공공데이터 목록 메뉴 링크를 누름
       dataListLink.click({ force: true }),
     ]).catch(() => null);
   }
@@ -240,7 +500,9 @@ async function ensureOnListPage(page) {
 
   const orgPopup = page.locator('.layer_instt_div .modal-dialog, .layer_instt_div #popupSearchKeyword3_sh');
   if (await orgPopup.first().isVisible({ timeout: 800 }).catch(() => false)) {
+    // 열려 있는 기관 선택 팝업을 닫기 위해 Escape 키를 누름
     await page.keyboard.press('Escape').catch(() => null);
+    // 기관 선택 팝업의 닫기 버튼을 누름
     await page.locator('.layer_instt_div button:has-text("닫기")').click({ force: true }).catch(() => null);
     await page.evaluate(() => {
       document.querySelectorAll('.layer_instt_div, .modal-back').forEach(el => {
@@ -253,6 +515,7 @@ async function ensureOnListPage(page) {
 async function openSearchModal(page) {
   const modal = page.locator('#detail-search-modal, [data-modal-id="detail-search-modal"]').first();
   if (!(await modal.isVisible({ timeout: 800 }).catch(() => false))) {
+    // 상세검색 모달 열기 버튼을 누름
     await page.locator('button[data-target="detail-search-modal"]').first().click({ force: true });
   }
   await page.waitForSelector('#orgNm', { timeout: TIMEOUT });
@@ -263,13 +526,14 @@ async function pickDataType(page, dType) {
   const input = page.locator('#detail-search-form-d-type');
   const current = await input.inputValue().catch(() => '');
   if (current !== dType) {
+    // 상세검색 모달에서 파일데이터 또는 오픈API 유형 버튼을 누름
     await page.locator(`.dTypeBtn[data-type="${dType}"]`).click({ force: true });
   }
   await waitUi(300);
 }
 
 async function selectOrg(page, orgName) {
-  // 기관명 인풋 클릭 → 팝업 열기
+  // 기관명 입력칸을 눌러 기관 선택 팝업을 열게 함
   await page.locator('#orgNm').click();
   await page.waitForSelector('#popupSearchKeyword3_sh', { timeout: TIMEOUT });
   await waitUi(300);
@@ -281,8 +545,10 @@ async function selectOrg(page, orgName) {
 
   for (const keyword of keywords) {
     await page.selectOption('#popupSearchCondition4_sh', '1').catch(() => null);
+    // 기관 검색어 입력칸을 누름
     await page.click('#popupSearchKeyword3_sh');
     await page.fill('#popupSearchKeyword3_sh', keyword);
+    // 기관 검색 팝업의 검색 버튼을 누름
     await page.locator('button.btn-exec[onclick*="fn_searchInsttList"]').click({ force: true });
     await page
       .waitForFunction(() => {
@@ -298,6 +564,7 @@ async function selectOrg(page, orgName) {
       const candidate = candidates.nth(i);
       const text = clean(await candidate.textContent());
       if (text === orgName || text.endsWith(` ${orgName}`) || text === keyword) {
+        // 검색 결과에서 대상 기관명을 누름
         await candidate.click({ force: true });
         await page.waitForFunction(
           expected => document.querySelector('#orgNm')?.value.includes(expected),
@@ -311,13 +578,16 @@ async function selectOrg(page, orgName) {
   }
 
   logger.warn({ orgName }, '기관을 팝업에서 찾지 못했습니다');
+  // 기관 선택 실패 후 팝업을 닫기 위해 Escape 키를 누름
   await page.keyboard.press('Escape').catch(() => null);
+  // 기관 선택 실패 후 팝업의 닫기 버튼을 누름
   await page.locator('.layer_instt_div button:has-text("닫기")').click({ force: true }).catch(() => null);
   await waitUi(500);
   return false;
 }
 
 async function submitSearch(page) {
+  // 상세검색 모달의 검색 실행 버튼을 누름
   await page.locator('button.close-modal[onclick="eventFncObj.search()"]').click({ force: true });
   await page
     .waitForSelector('.apply-result-item, .no-result-area, .no-data', { timeout: TIMEOUT })
@@ -328,9 +598,33 @@ async function submitSearch(page) {
 async function switchResultTab(page, dType) {
   const tab = page.locator(`a.one-depth-btn[data-type="${dType}"]`);
   if (await tab.isVisible({ timeout: 3000 }).catch(() => false)) {
+    // 검색 결과 화면에서 파일데이터 또는 오픈API 결과 탭을 누름
     await tab.click({ force: true });
     await waitUi(800);
   }
+}
+
+async function getResultTabCounts(page) {
+  return page.$$eval('a.one-depth-btn[data-type]', tabs => {
+    const counts = {};
+    for (const tab of tabs) {
+      const type = tab.getAttribute('data-type');
+      const spanText = tab.querySelector('span')?.textContent ?? '';
+      const count = parseInt(spanText.replace(/[^\d]/g, ''), 10);
+      if (type) counts[type] = Number.isFinite(count) ? count : 0;
+    }
+    return counts;
+  }).catch(() => ({}));
+}
+
+function validateTabCount(result, dType, expected, actual) {
+  if (!Number.isFinite(expected)) return;
+  if (expected === actual) return;
+
+  const label = typeLabel(dType);
+  const message = `${label}: 탭 표시 ${expected}건, 실제 수집 ${actual}건`;
+  result.errors.push(message);
+  logger.warn({ orgName: result.org, dType, expected, actual }, '탭 표시 건수와 수집 건수가 다름');
 }
 
 async function getTotalPages(page) {
@@ -348,11 +642,42 @@ async function getTotalPages(page) {
 async function getLinksOnPage(page, dType) {
   const suffix = dType === 'FILE' ? 'fileData.do' : 'openapi.do';
   return page.$$eval(
-    `.apply-result-link a[href*="${suffix}"]`,
-    els => els.map(el => ({
-      href:  el.getAttribute('href'),
-      title: (el.textContent ?? '').trim(),
-    }))
+    '.apply-result-item',
+    (items, { suffix, dType }) => {
+      const results = [];
+      for (const item of items) {
+        const linkEl = item.querySelector(`.apply-result-link a[href*="${suffix}"]`);
+        if (!linkEl) continue;
+        const formats = Array.from(item.querySelectorAll('.apply-result-link .krds-badge'))
+          .map(el => (el.innerText ?? el.textContent ?? '').replace(/\s+/g, ' ').trim())
+          .filter(Boolean);
+        const hasApiFormat = formats.some(format => /JSON\s*\+\s*XML|XML\s*\+\s*JSON|오픈\s*API|OPEN\s*API/i.test(format));
+        const hasFileFormat = formats.some(format => /\b(CSV|XLSX?|PDF|HWP|ZIP|TXT|SHP|DOCX?|PPTX?)\b/i.test(format));
+        const collectionType = dType === 'API' ? 'API' : '파일데이터';
+        const overallType = (hasApiFormat && (hasFileFormat || dType === 'FILE')) ||
+          (hasFileFormat && dType === 'API')
+            ? 'API/파일데이터'
+            : collectionType;
+        const data = {
+          '링크': linkEl.getAttribute('href') ?? '',
+          '제목': (linkEl.innerText ?? linkEl.textContent ?? '').replace(/\s+/g, ' ').trim(),
+          '유형': overallType,
+          __formats: formats.join(', '),
+        };
+        item.querySelectorAll('ul[role="none"] > li[role="none"]').forEach(li => {
+          const strong = li.querySelector('strong');
+          if (!strong) return;
+          const key = strong.textContent.trim();
+          const val = (li.innerText ?? li.textContent ?? '').replace(key, '').replace(/\s+/g, ' ').trim();
+          if (key === '조회수' || key === '수정일') data[key] = val;
+          if (dType === 'FILE' && key === '다운로드') data[key] = val;
+          if (dType === 'API'  && key === '활용신청') data[key] = val;
+        });
+        results.push(data);
+      }
+      return results;
+    },
+    { suffix, dType }
   );
 }
 
@@ -363,8 +688,9 @@ async function collectAllLinks(page, dType, maxItems = null) {
 
   while (true) {
     for (const link of await getLinksOnPage(page, dType)) {
-      if (!seen.has(link.href)) {
-        seen.add(link.href);
+      const linkHref = link.href ?? link['링크'];
+      if (!seen.has(linkHref)) {
+        seen.add(linkHref);
         all.push(link);
         if (maxItems && all.length >= maxItems) return all;
       }
@@ -386,7 +712,8 @@ async function collectAllLinks(page, dType, maxItems = null) {
 
     if (!nextPage || nextPage <= pageNo) break;
     pageNo = nextPage;
-    await page.evaluate(n => fn_page(n), nextPage); // eslint-disable-line no-undef
+    // 페이지네이션에서 다음 결과 페이지 번호를 누름
+    await page.evaluate(n => window.fn_page(n), nextPage);
     await page
       .waitForSelector('.apply-result-item, .no-result-area', { timeout: TIMEOUT })
       .catch(() => null);
@@ -397,28 +724,58 @@ async function collectAllLinks(page, dType, maxItems = null) {
   return all;
 }
 
-async function scrapeAllDetails(links, cookie, dType) {
+async function scrapeAllDetails(links, cookie, dType, detailCache = new Map()) {
   const results = [];
-  for (const { href, title } of links) {
+  let skipped = 0;
+  let fetched = 0;
+  let failed = 0;
+  for (const link of links) {
+    const href = link.href ?? link['링크'];
+    const title = link.title ?? link['제목'];
+    const { href: _href, title: _title, __formats, ...cardData } = link;
+    const key = cacheKey(href, dType);
+    const cached = key ? detailCache.get(key) : null;
+    const listRevision = clean(cardData['수정일']);
+    if (isReusableCachedItem(cached) && listRevision && cachedRevision(cached, dType) === listRevision) {
+      results.push(updateCachedMetrics(cached, link, dType, cardData));
+      skipped += 1;
+      logger.info({ title: clean(title).slice(0, 40), dType }, '수정일 동일로 상세 수집 생략함');
+      await sleep(30);
+      continue;
+    }
+
     try {
       const html   = await fetchHtml(BASE_URL + href, cookie);
-      const detail = parseDetailPage(html);
-      results.push({ href, title: clean(title), type: dType, ...detail });
-      logger.info({ title: clean(title).slice(0, 40), dType }, '상세 수집');
+      const detail = parseDetailPage(html, dType);
+      const cleanTitle = clean(title);
+      results.push(buildOutputRecord({ href, title: cleanTitle, dType, cardData: { ...cardData, __formats }, detail }));
+      fetched += 1;
+      logger.info({ title: clean(title).slice(0, 40), dType }, '상세 수집함');
     } catch (err) {
+      failed += 1;
       logger.warn({ href, err: err.message }, '상세 수집 실패');
-      results.push({ href, title: clean(title), type: dType, error: err.message });
+      const cleanTitle = clean(title);
+      results.push(buildOutputRecord({
+        href,
+        title: cleanTitle,
+        dType,
+        cardData: { ...cardData, __formats },
+        detail: {},
+        error: err.message,
+      }));
     }
     await sleep(200);
   }
+  logger.info({ dType, total: links.length, skipped, fetched, failed }, '상세 수집 단계 완료');
   return results;
 }
 
-// ── 기관별 크롤링 ─────────────────────────────────────────────────────────────
+// 기관별로 파일데이터와 API를 차례로 수집하는 함수 영역임
 
-async function crawlOrg(page, ctx, orgName) {
-  const result = { org: orgName, file: [], api: [], errors: [] };
+async function crawlOrg(page, ctx, orgName, detailCache) {
+  const result = { org: orgName, file: [], api: [], counts: { expected: {}, actual: {} }, errors: [] };
   const maxItems = parseInt(getArg('--max-items') ?? '0', 10) || null;
+  let tabCounts = {};
 
   for (const dType of ['FILE', 'API']) {
     try {
@@ -433,13 +790,17 @@ async function crawlOrg(page, ctx, orgName) {
       }
 
       await submitSearch(page);
+      tabCounts = Object.keys(tabCounts).length ? tabCounts : await getResultTabCounts(page);
       await switchResultTab(page, dType);
 
       const links = await collectAllLinks(page, dType, maxItems);
+      result.counts.expected[typeLabel(dType)] = tabCounts[dType] ?? null;
+      result.counts.actual[typeLabel(dType)] = links.length;
+      if (!maxItems) validateTabCount(result, dType, tabCounts[dType], links.length);
       logger.info({ orgName, dType, count: links.length }, '링크 수집 완료');
 
       const cookie  = await getCookieHeader(ctx);
-      const details = await scrapeAllDetails(links, cookie, dType);
+      const details = await scrapeAllDetails(links, cookie, dType, detailCache);
 
       if (dType === 'FILE') result.file = details;
       else result.api = details;
@@ -452,7 +813,7 @@ async function crawlOrg(page, ctx, orgName) {
   return result;
 }
 
-// ── 진입점 ───────────────────────────────────────────────────────────────────
+// 크롤러 실행을 시작하고 결과 파일을 저장하는 함수 영역임
 
 async function run() {
   const outputFile = getArg('--output') ?? path.join(OUTPUT_DIR, `datamap_${todayStamp()}.json`);
@@ -471,17 +832,19 @@ async function run() {
 
   fs.mkdirSync(path.dirname(outputFile), { recursive: true });
 
-  // 30일 지난 datamap_*.json 자동 삭제
+  // 30일 지난 datamap_*.json 파일을 자동 삭제함
   cleanOldDatamapFiles(path.dirname(outputFile));
 
-  // 이전 진행 상황 로드 (크래시 후 재개 지원)
+  // 이전 진행 상황을 로드해 크래시 후 재개를 지원함
   const out = { crawled_at: new Date().toISOString(), organizations: [] };
+  const detailCache = fresh ? new Map() : buildDetailCache(outputFile);
+  logger.info({ count: detailCache.size, fresh }, '기존 datamap 상세 캐시를 준비함');
   if (!fresh && fs.existsSync(outputFile)) {
     try {
       const prev = JSON.parse(fs.readFileSync(outputFile, 'utf-8'));
       out.organizations = prev.organizations ?? [];
       logger.info({ count: out.organizations.length }, '이전 진행 상황 로드');
-    } catch { /* 무시 */ }
+    } catch { /* 이전 결과 파일 파싱 실패를 무시함 */ }
   }
   const done = new Set(out.organizations.map(o => o.org));
 
@@ -498,7 +861,7 @@ async function run() {
   const page    = await ctx.newPage();
 
   try {
-    // 세션 쿠키 확립 및 실제 메뉴 경로 확인
+    // 세션 쿠키를 확립하고 실제 메뉴 경로를 확인함
     await goToDataSetList(page);
 
     for (const orgName of orgsToRun) {
@@ -508,10 +871,10 @@ async function run() {
       }
 
       logger.info({ orgName }, '══ 기관 크롤링 시작');
-      const result = await crawlOrg(page, ctx, orgName);
+      const result = await crawlOrg(page, ctx, orgName, detailCache);
       out.organizations.push(result);
 
-      // 기관 하나 완료 시 즉시 저장 (중간 장애 대비)
+      // 기관 하나 완료 시 즉시 저장해 중간 장애에 대비함
       saveDatamap(outputFile, out);
       logger.info(
         { orgName, file: result.file.length, api: result.api.length, errors: result.errors.length },

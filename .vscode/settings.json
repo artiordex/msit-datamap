@@ -2,8 +2,9 @@
   "files.encoding": "utf8",
   "files.eol": "\n",
   "editor.formatOnSave": true,
-  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/Scripts/python.exe",
-  "python.terminal.activateEnvironment": true,
+  "kestra.api.url": "http://localhost:8080/api/v1",
+  "kestra.api.tenant": "main",
+  "kestra.schema.match-path": "flows",
   "yaml.validate": true,
   "yaml.schemas": {
     "https://json.schemastore.org/github-workflow.json": ".github/workflows/*.{yml,yaml}"
@@ -15,4 +16,3 @@
   "git.enabled": true,
   "git.autofetch": true
 }
-

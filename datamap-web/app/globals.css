@@ -830,7 +830,8 @@ a {
   display: grid;
   width: 100%;
   min-height: 28px;
-  grid-template-columns: 30px 18px minmax(0, 1fr);
+  grid-template-columns: 30px 18px minmax(0, 1fr) 64px;
+  column-gap: 4px;
   align-items: center;
   border: 0;
   background: #ffffff;
@@ -865,6 +866,30 @@ a {
   font-weight: 750;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.dataset-kind-badge {
+  justify-self: end;
+  min-width: 42px;
+  border-radius: 999px;
+  background: #e0f2fe;
+  color: #075985;
+  padding: 3px 6px;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.dataset-kind-badge.file {
+  background: #eef2ff;
+  color: #3730a3;
+}
+
+.dataset-kind-badge.hybrid {
+  background: #ccfbf1;
+  color: #115e59;
 }
 
 .search-highlight {
