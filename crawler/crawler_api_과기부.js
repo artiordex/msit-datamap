@@ -618,6 +618,38 @@ async function getResultTabCounts(page) {
   }).catch(() => ({}));
 }
 
+function validateCollectedCounts(result, tabCounts, maxItems) {
+  if (maxItems) return;
+
+  const fileIds = new Set();
+  const apiIds = new Set();
+  const hybridIds = new Set();
+
+  for (const item of [...result.file, ...result.api]) {
+    const id = datasetId(item['링크']) || item['링크'] || item['제목'];
+    if (!id) continue;
+    if (item['유형'] === 'API') apiIds.add(id);
+    else if (item['유형'] === 'API/파일데이터') {
+      fileIds.add(id);
+      hybridIds.add(id);
+    } else {
+      fileIds.add(id);
+    }
+  }
+
+  const actualFile = fileIds.size;
+  const actualApi = apiIds.size;
+  const expectedFile = tabCounts.FILE;
+  const expectedApi = tabCounts.API;
+
+  result.counts.actual['파일데이터'] = actualFile;
+  result.counts.actual.API = actualApi;
+  result.counts.actual['API/파일데이터'] = hybridIds.size;
+
+  validateTabCount(result, 'FILE', expectedFile, actualFile);
+  validateTabCount(result, 'API', expectedApi, actualApi);
+}
+
 function validateTabCount(result, dType, expected, actual) {
   if (!Number.isFinite(expected)) return;
   if (expected === actual) return;
@@ -796,8 +828,7 @@ async function crawlOrg(page, ctx, orgName, detailCache) {
 
       const links = await collectAllLinks(page, dType, maxItems);
       result.counts.expected[typeLabel(dType)] = tabCounts[dType] ?? null;
-      result.counts.actual[typeLabel(dType)] = links.length;
-      if (!maxItems) validateTabCount(result, dType, tabCounts[dType], links.length);
+      result.counts.actual[`${typeLabel(dType)} 탭 수집`] = links.length;
       logger.info({ orgName, dType, count: links.length }, '링크 수집 완료');
 
       const cookie  = await getCookieHeader(ctx);
@@ -810,6 +841,8 @@ async function crawlOrg(page, ctx, orgName, detailCache) {
       result.errors.push(`${dType}: ${err.message}`);
     }
   }
+
+  validateCollectedCounts(result, tabCounts, maxItems);
 
   return result;
 }
