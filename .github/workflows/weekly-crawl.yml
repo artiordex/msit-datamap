@@ -64,9 +64,26 @@ jobs:
         run: npx playwright install chromium --with-deps
 
       - name: Check data.go.kr connectivity
+        shell: bash
         run: |
-          curl -I --max-time 30 https://www.data.go.kr/ || true
-          curl -I --max-time 30 https://www.data.go.kr/tcs/dss/selectDataSetList.do || true
+          echo "=== Current time ==="
+          date
+
+          echo "=== DNS lookup ==="
+          getent ahosts www.data.go.kr || true
+
+          echo "=== HTTPS connectivity test ==="
+          curl -4 -L \
+            --verbose \
+            --retry 3 \
+            --retry-delay 10 \
+            --retry-all-errors \
+            --connect-timeout 20 \
+            --max-time 60 \
+            --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/150.0.0.0 Safari/537.36" \
+            --write-out "\nHTTP_STATUS=%{http_code}\nREMOTE_IP=%{remote_ip}\nTOTAL_TIME=%{time_total}\n" \
+            --output /dev/null \
+            "https://www.data.go.kr/tcs/dss/selectDataSetList.do" || true
 
       - name: Run crawler
         run: node crawler/crawler_api_과기부.js --fresh
