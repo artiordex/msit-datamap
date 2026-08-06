@@ -547,6 +547,7 @@ a {
   grid-template-rows: minmax(0, 1fr);
   background: #f9fafb;
   cursor: default;
+  overflow: hidden;
 }
 
 .guide-interface-modal *,
@@ -962,6 +963,10 @@ a {
 
 .guide-interface-modal .guide-preview-map {
   grid-template-columns: minmax(0, 1fr);
+  width: 111.111%;
+  height: 111.111%;
+  transform: scale(0.9);
+  transform-origin: top left;
 }
 
 .guide-interface-modal .guide-preview-map > * {

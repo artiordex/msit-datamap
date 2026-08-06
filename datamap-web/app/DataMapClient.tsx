@@ -1820,11 +1820,6 @@ function GuideDataMapPreview({
 
       <section className={`map-workspace guide-preview-workspace${detailsOpen ? " with-detail" : ""}`}>
         <section className="network-shell" aria-label="공공데이터 네트워크 맵">
-          <div className="network-toolbar">
-            <button className="canvas-help-button" type="button" aria-label="가이드">
-              <Icon name="help" size={17} />
-            </button>
-          </div>
           <NetworkGraph
             center={graphData.center}
             focusAnchor={isNodeCloseupGuide ? { x: 0.5, y: 0.86 } : undefined}
@@ -4995,17 +4990,19 @@ export function DataMapClient() {
 
       <section className={`map-workspace${detailsOpen ? " with-detail" : ""}`}>
         <section className="network-shell" aria-label="공공데이터 네트워크 맵">
-          <div className="network-toolbar">
-            <button
-              className="canvas-help-button"
-              type="button"
-              onClick={() => setGuideOpen(true)}
-              title="데이터맵 온라인 가이드 열기"
-              aria-label="데이터맵 온라인 가이드 열기"
-            >
-              <Icon name="help" size={17} />
-            </button>
-          </div>
+          {!detailsOpen ? (
+            <div className="network-toolbar">
+              <button
+                className="canvas-help-button"
+                type="button"
+                onClick={() => setGuideOpen(true)}
+                title="데이터맵 온라인 가이드 열기"
+                aria-label="데이터맵 온라인 가이드 열기"
+              >
+                <Icon name="help" size={17} />
+              </button>
+            </div>
+          ) : null}
           {isCatalogLoading ? <div className="canvas-status">데이터를 불러오는 중입니다.</div> : null}
           {catalogError ? <div className="canvas-status error">{catalogError}</div> : null}
           <NetworkGraph
