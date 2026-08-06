@@ -320,7 +320,7 @@ a {
 }
 
 .result-search input {
-  padding: 0 116px 0 14px;
+  padding: 0 135px 0 14px;
 }
 
 .condition-select select {
@@ -415,11 +415,13 @@ a {
 .result-count {
   position: absolute;
   top: 50%;
-  right: 82px;
+  right: 80px;
   color: #6b7280;
   font-size: 12px;
   font-weight: 850;
   transform: translateY(-50%);
+  pointer-events: none;
+  white-space: nowrap;
 }
 
 .result-search button {
@@ -457,13 +459,20 @@ a {
   position: absolute;
   top: 16px;
   right: 16px;
-  z-index: 18;
+  z-index: 40;
   display: flex;
   align-items: center;
   gap: 8px;
+  pointer-events: auto;
+}
+
+.map-workspace.with-detail .network-toolbar {
+  right: 424px;
 }
 
 .canvas-help-button {
+  position: relative;
+  z-index: 41;
   display: grid;
   width: 32px;
   height: 32px;
@@ -474,6 +483,7 @@ a {
   color: #4b5563;
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.1);
   cursor: help;
+  pointer-events: auto;
 }
 
 .canvas-help-button:hover {
@@ -567,7 +577,7 @@ a {
   min-height: 0;
   height: 100%;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  overflow: hidden;
+  overflow: visible;
   background: #f9fafb;
 }
 
@@ -625,6 +635,7 @@ a {
 
 .guide-preview-map .search-submit {
   width: 30px;
+  height: 26px;
   min-height: 26px;
   border-radius: 0 6px 6px 0;
 }
@@ -641,18 +652,32 @@ a {
 }
 
 .guide-preview-map .result-search input {
-  padding: 0 72px 0 8px;
+  padding: 0 88px 0 8px;
 }
 
 .guide-preview-map .result-count {
-  right: 47px;
+  right: 52px;
   font-size: 9px;
+  transform: translateY(-50%);
+  white-space: nowrap;
 }
 
 .guide-preview-map .result-search button {
-  width: 20px;
-  min-width: 20px;
-  height: 20px;
+  width: 16px;
+  min-width: 16px;
+  height: 18px;
+}
+
+.guide-preview-map .result-search button:nth-of-type(1) {
+  right: 34px;
+}
+
+.guide-preview-map .result-search button:nth-of-type(2) {
+  right: 18px;
+}
+
+.guide-preview-map .result-search button:nth-of-type(3) {
+  right: 2px;
 }
 
 .guide-preview-map .keyword-row {
@@ -947,12 +972,12 @@ a {
   min-width: 0;
   min-height: 46px;
   gap: 8px;
-  overflow: hidden;
+  overflow: visible;
   padding: 6px 10px;
 }
 
 .guide-interface-modal .guide-preview-map .brand-area {
-  flex: 0 1 210px;
+  flex: 0 0 auto;
   min-width: 0;
 }
 
@@ -1072,7 +1097,7 @@ a {
   stroke-width: 1.2;
   transform-box: fill-box;
   transform-origin: 430px 170px;
-  animation: guide-fan-line 620ms ease both;
+  animation: guide-fan-line 360ms ease both;
   animation-delay: var(--fan-delay, 0ms);
 }
 
@@ -1082,8 +1107,8 @@ a {
   stroke-width: 1.6;
   filter: drop-shadow(0 5px 8px rgba(124, 58, 237, 0.2));
   opacity: 0;
-  animation: guide-fan-dot 520ms ease both;
-  animation-delay: calc(var(--fan-delay, 0ms) + 90ms);
+  animation: guide-fan-dot 320ms ease both;
+  animation-delay: calc(var(--fan-delay, 0ms) + 50ms);
 }
 
 .guide-record-fan-item text {
@@ -1096,8 +1121,8 @@ a {
   paint-order: stroke;
   stroke: rgba(255, 255, 255, 0.92);
   stroke-width: 2.8px;
-  animation: guide-fan-text 520ms ease both;
-  animation-delay: calc(var(--fan-delay, 0ms) + 140ms);
+  animation: guide-fan-text 320ms ease both;
+  animation-delay: calc(var(--fan-delay, 0ms) + 70ms);
 }
 
 .guide-svg-node {
@@ -1273,7 +1298,43 @@ a {
     0 18px 48px rgba(37, 99, 235, 0.2);
   background: transparent;
   pointer-events: none;
-  transition: left 0.42s ease, top 0.42s ease, width 0.42s ease, height 0.42s ease;
+  transition: left 0.22s ease, top 0.22s ease, width 0.22s ease, height 0.22s ease;
+}
+
+.guide-spotlight.option-focus {
+  z-index: 110;
+  border-radius: 6px;
+  box-shadow:
+    0 0 0 4px rgba(37, 99, 235, 0.16),
+    0 10px 28px rgba(37, 99, 235, 0.2);
+  transition: none;
+}
+
+.guide-spotlight.node-closeup-focus,
+.guide-spotlight.node-group-focus {
+  border-radius: 10px;
+  box-shadow:
+    0 0 0 5px rgba(37, 99, 235, 0.12),
+    0 18px 42px rgba(37, 99, 235, 0.18);
+  transition: none;
+}
+
+.guide-custom-focus {
+  position: fixed;
+  inset: 0;
+  z-index: 109;
+  width: 100vw;
+  height: 100vh;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.guide-node-label-focus-path {
+  fill: rgba(239, 246, 255, 0.08);
+  stroke: #2563eb;
+  stroke-width: 3.5;
+  stroke-linejoin: miter;
+  filter: drop-shadow(0 14px 34px rgba(37, 99, 235, 0.2));
 }
 
 .guide-dim-piece {
@@ -1284,9 +1345,9 @@ a {
 .guide-click-pulse,
 .guide-click-label {
   position: fixed;
-  z-index: 107;
+  z-index: 112;
   pointer-events: none;
-  transition: left 0.42s ease, top 0.42s ease;
+  transition: left 0.22s ease, top 0.22s ease;
 }
 
 .guide-pointer {
@@ -1323,7 +1384,7 @@ a {
 
 .guide-select-popover {
   position: fixed;
-  z-index: 106;
+  z-index: 109;
   display: grid;
   overflow: hidden;
   border: 1px solid #93c5fd;
@@ -1346,9 +1407,18 @@ a {
   border-top: 1px solid #e5e7eb;
 }
 
-.guide-select-popover strong {
+.guide-select-popover .guide-select-option-hybrid {
   background: #eff6ff;
   color: var(--primary-dark);
+}
+
+.guide-select-popover.phase-open .guide-select-option-hybrid {
+  box-shadow: inset 0 0 0 2px rgba(37, 99, 235, 0.28);
+}
+
+.guide-select-popover.phase-selected .guide-select-option-hybrid {
+  background: var(--primary);
+  color: #ffffff;
 }
 
 .guide-modal-footer {
@@ -1437,6 +1507,11 @@ a {
     0 26px 70px rgba(15, 23, 42, 0.24),
     inset 0 1px 0 rgba(255, 255, 255, 0.92);
   transition: left 0.18s ease, top 0.18s ease;
+}
+
+.guide-callout.node-closeup-callout,
+.guide-callout.node-group-callout {
+  transition: none;
 }
 
 .guide-callout-header {
@@ -1756,6 +1831,7 @@ a {
 .network-canvas {
   position: absolute;
   inset: 0;
+  z-index: 1;
   cursor: move;
 }
 
@@ -1937,13 +2013,13 @@ a {
 .d3-record-label {
   fill: #0f172a;
   cursor: pointer;
-  font-size: 11px;
+  font-size: 13.5px;
   font-weight: 900;
   paint-order: stroke;
   pointer-events: auto;
-  stroke: rgba(255, 255, 255, 0.92);
+  stroke: rgba(255, 255, 255, 0.95);
   stroke-linejoin: round;
-  stroke-width: 3.4px;
+  stroke-width: 4px;
 }
 
 .detail-content {
@@ -1987,6 +2063,7 @@ a {
 
 .dataset-list {
   display: grid;
+  align-content: start;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -1999,14 +2076,14 @@ a {
 .dataset-list button {
   display: grid;
   width: 100%;
-  min-height: 28px;
+  min-height: 36px;
   grid-template-columns: 30px 18px minmax(0, 1fr) 64px;
   column-gap: 4px;
   align-items: center;
   border: 0;
   background: #ffffff;
   color: #4b5563;
-  padding: 4px 0;
+  padding: 6px 0;
   text-align: left;
   cursor: pointer;
 }
@@ -2194,6 +2271,10 @@ a {
     width: 354px;
   }
 
+  .map-workspace.with-detail .network-toolbar {
+    right: 394px;
+  }
+
 }
 
 @media (max-width: 1100px) {
@@ -2260,6 +2341,10 @@ a {
   }
 
   .network-toolbar {
+    right: 14px;
+  }
+
+  .map-workspace.with-detail .network-toolbar {
     right: 14px;
   }
 

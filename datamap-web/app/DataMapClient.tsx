@@ -889,6 +889,8 @@ type GuideTargetRect = {
   height: number;
 };
 
+type GuideKindSelectPhase = "idle" | "pressed" | "open" | "selected";
+
 type GuideStep = {
   id:
   | "kind"
@@ -975,14 +977,31 @@ const guideFanRecordLabels = [
 
 const guideSteps: GuideStep[] = [
   {
-    id: "kind",
+    id: "level1Node",
     badge: "1",
-    label: "유형",
-    title: "유형 선택",
+    label: "분류 기준",
+    title: "데이터맵 구성 보기",
     body: [
-      "전체 유형 셀렉트 박스를 클릭해 제공 유형 목록을 엽니다.",
-      "목록에서 API/파일데이터를 선택하는 모션과 실제 값 변경을 함께 보여줍니다.",
-      "API/파일데이터 유형으로 바뀌면 중앙 데이터 수가 903건 기준으로 갱신됩니다.",
+      "중앙의 데이터현황은 현재 조건에 맞는 전체 데이터 수를 보여줍니다.",
+      "주변의 큰 원은 과학기술·통신·교육처럼 데이터가 속한 1차 분류입니다.",
+      "1차 분류를 선택하면 그 안의 세부 분류와 연결 데이터까지 이어서 살펴볼 수 있습니다.",
+    ],
+    targetSelectors: [
+      ".guide-preview-map .d3-node.center, .guide-preview-map .d3-node.level1:not(.empty), .guide-preview-map .d3-node.level2:not(.empty)",
+      ".guide-preview-map .network-shell",
+    ],
+    clickPoint: { x: 0.5, y: 0.5 },
+    panelSide: "left",
+  },
+  {
+    id: "kind",
+    badge: "2",
+    label: "유형",
+    title: "데이터 유형 선택",
+    body: [
+      "전체 유형 목록에서 원하는 제공 방식을 고를 수 있습니다.",
+      "API/파일데이터를 선택하면 파일과 API가 함께 제공되는 데이터만 남습니다.",
+      "유형을 바꾸면 중앙 데이터 수와 오른쪽 목록이 같은 조건으로 갱신됩니다.",
     ],
     targetSelectors: [".condition-select select"],
     clickPoint: { x: 0.68, y: 0.5 },
@@ -990,13 +1009,13 @@ const guideSteps: GuideStep[] = [
   },
   {
     id: "org",
-    badge: "2",
+    badge: "3",
     label: "기관",
-    title: "기관 선택",
+    title: "기관별 데이터 보기",
     body: [
-      "전체 기관 버튼을 클릭해 기관 목록을 엽니다.",
-      "기관 목록을 스크롤한 뒤 과학기술정보통신부 체크박스에 체크합니다.",
-      "과학기술정보통신부 데이터만 지도와 목록에 남습니다.",
+      "기관 목록에서 원하는 제공기관을 선택할 수 있습니다.",
+      "과학기술정보통신부를 선택하면 해당 기관 데이터만 데이터맵에 표시됩니다.",
+      "기관 조건은 검색, 키워드, 목록에도 함께 적용됩니다.",
     ],
     targetSelectors: [".org-filter-option.guide-org-choice", ".org-filter-menu", ".org-filter-trigger"],
     clickPoint: { x: 0.55, y: 0.5 },
@@ -1004,13 +1023,13 @@ const guideSteps: GuideStep[] = [
   },
   {
     id: "mapSearch",
-    badge: "3",
+    badge: "4",
     label: "검색",
-    title: "데이터맵 검색",
+    title: "검색어로 데이터 찾기",
     body: [
-      "데이터맵 검색창에 기술이 한 글자씩 입력됩니다.",
-      "입력이 끝나면 검색 버튼까지 선택되며 기술 검색이 적용됩니다.",
-      "검색 결과는 실제 데이터맵과 같은 노드와 목록으로 갱신됩니다.",
+      "데이터맵 검색창에 찾고 싶은 단어를 입력합니다.",
+      "검색어가 포함된 데이터가 있는 분류 노드가 활성화됩니다.",
+      "오른쪽 목록에서도 같은 검색 결과를 바로 확인할 수 있습니다.",
     ],
     targetSelectors: [".global-search-group"],
     clickPoint: { x: 0.44, y: 0.5 },
@@ -1018,13 +1037,13 @@ const guideSteps: GuideStep[] = [
   },
   {
     id: "detailSearch",
-    badge: "4",
+    badge: "5",
     label: "내검색",
-    title: "결과 내 검색",
+    title: "현재 결과 안에서 다시 찾기",
     body: [
-      "결과 내 검색창에는 데이터가 한 글자씩 입력됩니다.",
-      "이 검색은 현재 오른쪽 목록 안에서만 다시 찾습니다.",
-      "목록이 길 때 데이터명이나 키워드 일부를 넣어 항목을 빠르게 찾습니다.",
+      "결과 내 검색은 현재 표시된 목록 안에서 한 번 더 찾는 기능입니다.",
+      "데이터명이나 키워드 일부를 입력하면 목록 안의 해당 항목으로 이동합니다.",
+      "검색 결과가 많을 때 원하는 데이터를 빠르게 좁혀볼 수 있습니다.",
     ],
     targetSelectors: [".result-search input", ".result-search"],
     clickPoint: { x: 0.32, y: 0.5 },
@@ -1032,13 +1051,13 @@ const guideSteps: GuideStep[] = [
   },
   {
     id: "keyword",
-    badge: "5",
+    badge: "6",
     label: "키워드",
-    title: "과학기술연구 키워드 클릭",
+    title: "추천 키워드 활용",
     body: [
-      "상단 추천 키워드에서 과학기술연구를 선택합니다.",
-      "키워드는 다운로드와 활용신청이 많은 데이터에서 뽑아 보여줍니다.",
-      "과학기술연구를 누르면 검색어가 적용되고 관련 데이터맵으로 전환됩니다.",
+      "상단에는 자주 활용되는 추천 키워드가 표시됩니다.",
+      "과학기술연구를 선택하면 해당 키워드가 검색 조건으로 적용됩니다.",
+      "관련 데이터가 있는 노드와 목록이 함께 갱신됩니다.",
     ],
     targetSelectors: [".keyword-pager button.active", ".keyword-row"],
     clickPoint: { x: 0.55, y: 0.5 },
@@ -1046,13 +1065,13 @@ const guideSteps: GuideStep[] = [
   },
   {
     id: "controls",
-    badge: "6",
+    badge: "7",
     label: "조작",
     title: "화면 조작 버튼",
     body: [
-      "전체 노드 펼치기, 확대, 축소, 초기화 버튼을 순서대로 소개합니다.",
-      "각 버튼을 누르지는 않고, 어떤 기능인지 하나씩 가리켜 보여줍니다.",
-      "전체 노드 버튼은 한 번 더 누르면 기본 화면 노드만 보이도록 접힙니다.",
+      "왼쪽 버튼으로 데이터맵 화면을 보기 좋게 조정할 수 있습니다.",
+      "전체 노드 펼치기, 확대, 축소, 초기화 기능을 순서대로 확인합니다.",
+      "전체 노드 버튼은 다시 누르면 기본 분류 화면으로 돌아갑니다.",
     ],
     targetSelectors: [".canvas-map-controls .fit-view-button", ".canvas-map-controls"],
     clickPoint: { x: 0.5, y: 0.2 },
@@ -1081,42 +1100,43 @@ const guideSteps: GuideStep[] = [
     ],
   },
   {
-    id: "level1Node",
-    badge: "7",
-    label: "1차노드",
-    title: "1차 분류 노드 클릭",
-    body: [
-      "중앙 주변의 1차 분류 노드를 클릭해 큰 분류를 선택합니다.",
-      "선택한 분류의 하위 노드가 펼쳐지고 오른쪽 목록도 함께 갱신됩니다.",
-      "노드 색상과 연결선으로 현재 선택된 분류 위치를 확인합니다.",
-    ],
-    targetSelectors: [".d3-node.level1:not(.empty)", ".network-shell"],
-    clickPoint: { x: 0.5, y: 0.5 },
-    panelSide: "left",
-  },
-  {
     id: "level2Node",
     badge: "8",
     label: "2차노드",
-    title: "2차 분류 노드 클릭",
+    title: "분류 노드와 데이터명 확인",
     body: [
-      "1차 분류 아래에 열린 2차 노드를 클릭합니다.",
-      "선택한 세부 분류 기준으로 데이터 점과 목록이 다시 좁혀집니다.",
-      "선택한 2차 분류에 연결된 하위 데이터 노드가 모두 보이도록 펼쳐집니다.",
+      "과학기술 아래의 과학기술진흥 분류를 선택해 세부 데이터를 확인합니다.",
+      "선택한 분류와 연결된 데이터명이 4차 노드로 펼쳐집니다.",
+      "데이터명을 선택하면 오른쪽 목록과 상세 정보로 이어집니다.",
     ],
-    targetSelectors: [".d3-node.level2.active", ".d3-node.level2", ".network-shell"],
+    targetSelectors: [".guide-preview-map .d3-node.level2.active", ".guide-preview-map .d3-node.level2"],
     clickPoint: { x: 0.5, y: 0.5 },
     panelSide: "left",
+    substeps: [
+      {
+        label: "과학기술진흥",
+        targetSelectors: [".guide-preview-map .d3-node.level2.active", ".guide-preview-map .d3-node.level2"],
+        clickPoint: { x: 0.5, y: 0.5 },
+      },
+      {
+        label: "데이터명",
+        targetSelectors: [
+          ".guide-preview-map .d3-node.level2.active, .guide-preview-map .d3-node.record circle:not(.d3-record-hit)",
+          ".guide-preview-map .d3-node.level2.active",
+        ],
+        clickPoint: { x: 0.5, y: 0.5 },
+      },
+    ],
   },
   {
     id: "dataList",
     badge: "9",
     label: "목록",
-    title: "데이터 목록 클릭",
+    title: "데이터 목록에서 항목 선택",
     body: [
-      "오른쪽 데이터 목록에서 원하는 항목 버튼을 클릭합니다.",
-      "목록에는 파일, API, API/파일 유형 배지가 함께 표시됩니다.",
-      "여성과학기술인력 데이터 항목을 누르는 모션 뒤 다음 단계에서 상세화면으로 전환됩니다.",
+      "오른쪽 목록에는 현재 조건에 맞는 데이터가 순서대로 표시됩니다.",
+      "각 항목에는 파일, API, API/파일 유형 배지가 함께 표시됩니다.",
+      "목록에서 항목을 선택하면 해당 데이터의 상세 정보가 열립니다.",
     ],
     targetSelectors: [".guide-list-click-target", ".dataset-list button", ".dataset-list-section", ".detail-panel"],
     clickPoint: { x: 0.5, y: 0.5 },
@@ -1126,11 +1146,11 @@ const guideSteps: GuideStep[] = [
     id: "portalLink",
     badge: "10",
     label: "바로가기",
-    title: "공공데이터 바로가기",
+    title: "공공데이터포털로 이동",
     body: [
-      "상세화면 하단의 공공데이터포털 바로가기 버튼을 확인합니다.",
-      "이 버튼을 누르면 원문 상세 페이지로 이동해 다운로드와 활용신청을 진행할 수 있습니다.",
-      "모달에서는 이동 흐름만 보여주고 실제 새 창은 열지 않습니다.",
+      "상세 정보 하단에서 공공데이터포털 바로가기 버튼을 확인할 수 있습니다.",
+      "원문 페이지에서 다운로드, 활용신청, 제공기관 정보를 이어서 확인합니다.",
+      "가이드에서는 이동 위치만 안내하고 현재 화면은 유지됩니다.",
     ],
     targetSelectors: [".data-portal-link", ".record-table-view", ".detail-panel"],
     clickPoint: { x: 0.5, y: 0.5 },
@@ -1149,35 +1169,218 @@ function clampNumber(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
 
-function findGuideTarget(selectors: string[], root?: HTMLElement | null): GuideTargetRect {
-  for (const selector of selectors) {
-    const element = root?.querySelector<Element>(selector) ?? document.querySelector<Element>(selector);
-    if (!element) continue;
+function roundedGuideRect(rect: GuideTargetRect): GuideTargetRect {
+  return {
+    left: Math.round(rect.left),
+    top: Math.round(rect.top),
+    width: Math.round(rect.width),
+    height: Math.round(rect.height),
+  };
+}
 
-    const style = window.getComputedStyle(element);
-    const rect = element.getBoundingClientRect();
-    if (style.display === "none" || style.visibility === "hidden" || rect.width <= 0 || rect.height <= 0) {
-      continue;
-    }
-
-    return {
-      left: rect.left,
-      top: rect.top,
-      width: rect.width,
-      height: rect.height,
-    };
+function guideVisibleRect(element: Element): GuideTargetRect | null {
+  const style = window.getComputedStyle(element);
+  const rect = element.getBoundingClientRect();
+  if (style.display === "none" || style.visibility === "hidden" || rect.width <= 0 || rect.height <= 0) {
+    return null;
   }
 
-  const fallback = root?.querySelector<HTMLElement>(".network-shell") ?? document.querySelector<HTMLElement>(".network-shell");
-  if (!fallback) return emptyGuideRect;
-
-  const rect = fallback.getBoundingClientRect();
   return {
     left: rect.left,
     top: rect.top,
     width: rect.width,
     height: rect.height,
   };
+}
+
+function unionGuideRects(rects: GuideTargetRect[]): GuideTargetRect {
+  const left = Math.min(...rects.map((rect) => rect.left));
+  const top = Math.min(...rects.map((rect) => rect.top));
+  const right = Math.max(...rects.map((rect) => rect.left + rect.width));
+  const bottom = Math.max(...rects.map((rect) => rect.top + rect.height));
+
+  return {
+    left,
+    top,
+    width: right - left,
+    height: bottom - top,
+  };
+}
+
+function findGuideTarget(selectors: string[], root?: HTMLElement | null): GuideTargetRect {
+  for (const selector of selectors) {
+    const rootMatches = root ? Array.from(root.querySelectorAll<Element>(selector)) : [];
+    const matches = rootMatches.length > 0 ? rootMatches : Array.from(document.querySelectorAll<Element>(selector));
+    const rects: GuideTargetRect[] = [];
+
+    for (const element of matches) {
+      const rect = guideVisibleRect(element);
+      if (rect) rects.push(rect);
+    }
+
+    if (rects.length > 0) return roundedGuideRect(unionGuideRects(rects));
+  }
+
+  const fallback = root?.querySelector<HTMLElement>(".network-shell") ?? document.querySelector<HTMLElement>(".network-shell");
+  if (!fallback) return emptyGuideRect;
+
+  const rect = fallback.getBoundingClientRect();
+  return roundedGuideRect({
+    left: rect.left,
+    top: rect.top,
+    width: rect.width,
+    height: rect.height,
+  });
+}
+
+type GuidePoint = {
+  x: number;
+  y: number;
+};
+
+function parseSvgTranslate(transform: string) {
+  const match = /translate\(\s*([-0-9.]+)(?:[,\s]+([-0-9.]+))?\s*\)/.exec(transform);
+  return {
+    x: Number(match?.[1] ?? 0),
+    y: Number(match?.[2] ?? 0),
+  };
+}
+
+function parseSvgScale(transform: string) {
+  const match = /scale\(\s*([-0-9.]+)\s*\)/.exec(transform);
+  return Number(match?.[1] ?? 1);
+}
+
+function parseSvgRotate(transform: string) {
+  const match = /rotate\(\s*([-0-9.]+)\s*\)/.exec(transform);
+  return (Number(match?.[1] ?? 0) * Math.PI) / 180;
+}
+
+function guideBoxCorners(box: DOMRect): GuidePoint[] {
+  return [
+    { x: box.x, y: box.y },
+    { x: box.x + box.width, y: box.y },
+    { x: box.x + box.width, y: box.y + box.height },
+    { x: box.x, y: box.y + box.height },
+  ];
+}
+
+function rotateGuidePoint(point: GuidePoint, angle: number): GuidePoint {
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+
+  return {
+    x: point.x * cos - point.y * sin,
+    y: point.x * sin + point.y * cos,
+  };
+}
+
+function guideOrientedRectPath(
+  points: GuidePoint[],
+  longPadding = 10,
+  crossPadding = 8,
+  minTop?: number,
+) {
+  if (points.length < 3) return "";
+
+  const center = points.reduce(
+    (sum, point) => ({ x: sum.x + point.x / points.length, y: sum.y + point.y / points.length }),
+    { x: 0, y: 0 },
+  );
+  const covariance = points.reduce(
+    (sum, point) => {
+      const x = point.x - center.x;
+      const y = point.y - center.y;
+      return {
+        xx: sum.xx + x * x,
+        xy: sum.xy + x * y,
+        yy: sum.yy + y * y,
+      };
+    },
+    { xx: 0, xy: 0, yy: 0 },
+  );
+  const angle = 0.5 * Math.atan2(2 * covariance.xy, covariance.xx - covariance.yy);
+  const axis = { x: Math.cos(angle), y: Math.sin(angle) };
+  const cross = { x: -axis.y, y: axis.x };
+  const projected = points.map((point) => {
+    const x = point.x - center.x;
+    const y = point.y - center.y;
+    return {
+      axis: x * axis.x + y * axis.y,
+      cross: x * cross.x + y * cross.y,
+    };
+  });
+  const minAxis = Math.min(...projected.map((point) => point.axis)) - longPadding;
+  const maxAxis = Math.max(...projected.map((point) => point.axis)) + longPadding;
+  const minCross = Math.min(...projected.map((point) => point.cross)) - crossPadding;
+  const maxCross = Math.max(...projected.map((point) => point.cross)) + crossPadding;
+  const corner = (axisValue: number, crossValue: number): GuidePoint => ({
+    x: center.x + axis.x * axisValue + cross.x * crossValue,
+    y: center.y + axis.y * axisValue + cross.y * crossValue,
+  });
+  const corners = [
+    corner(minAxis, minCross),
+    corner(maxAxis, minCross),
+    corner(maxAxis, maxCross),
+    corner(minAxis, maxCross),
+  ];
+  if (typeof minTop === "number") {
+    const top = Math.min(...corners.map((point) => point.y));
+    if (top < minTop) {
+      const shiftY = minTop - top;
+      corners.forEach((point) => {
+        point.y += shiftY;
+      });
+    }
+  }
+
+  return `M ${corners.map((point) => `${Math.round(point.x)} ${Math.round(point.y)}`).join(" L ")} Z`;
+}
+
+function findGuideRecordFocusPath(root?: HTMLElement | null) {
+  if (!root) return "";
+
+  const rootBounds = root.getBoundingClientRect();
+
+  const points: GuidePoint[] = [];
+  const addSvgElementBox = (element: SVGGraphicsElement) => {
+    const svg = element.ownerSVGElement;
+    const matrix = element.getScreenCTM();
+    if (!svg || !matrix) return;
+
+    const box = element.getBBox();
+    if (box.width <= 0 || box.height <= 0) return;
+
+    const elementPoints = guideBoxCorners(box).map((corner) => {
+      const svgPoint = svg.createSVGPoint();
+      svgPoint.x = corner.x;
+      svgPoint.y = corner.y;
+      const screenPoint = svgPoint.matrixTransform(matrix);
+      return { x: screenPoint.x, y: screenPoint.y };
+    });
+    const left = Math.min(...elementPoints.map((point) => point.x));
+    const right = Math.max(...elementPoints.map((point) => point.x));
+    const top = Math.min(...elementPoints.map((point) => point.y));
+    const bottom = Math.max(...elementPoints.map((point) => point.y));
+    const isVisible =
+      right > rootBounds.left &&
+      bottom > rootBounds.top &&
+      left < rootBounds.right &&
+      top < rootBounds.bottom;
+    if (!isVisible) return;
+
+    points.push(...elementPoints);
+  };
+
+  root
+    .querySelectorAll<SVGTextElement>(".guide-preview-map .d3-node.record .d3-record-label")
+    .forEach(addSvgElementBox);
+
+  root
+    ?.querySelectorAll<SVGCircleElement>(".guide-preview-map .d3-node.record circle:not(.d3-record-hit)")
+    .forEach(addSvgElementBox);
+
+  return guideOrientedRectPath(points, 8, 6);
 }
 
 function guideStepIndexOf(id: GuideStep["id"]) {
@@ -1188,17 +1391,22 @@ function GuideDataMapPreview({
   crawledAt,
   datasets,
   detailQuery,
+  kindCommitted,
   mapQuery,
+  subStepIndex,
   stepIndex,
 }: {
   crawledAt: string;
   datasets: DatasetRecord[];
   detailQuery: string;
+  kindCommitted: boolean;
   mapQuery: string;
+  subStepIndex: number;
   stepIndex: number;
 }) {
   const step = guideSteps[stepIndex] ?? guideSteps[0];
-  const hasKind = stepIndex >= guideStepIndexOf("kind");
+  const kindStepIndex = guideStepIndexOf("kind");
+  const hasKind = stepIndex > kindStepIndex || (stepIndex === kindStepIndex && kindCommitted);
   const hasOrg = stepIndex >= guideStepIndexOf("org");
   const hasMapSearch = stepIndex >= guideStepIndexOf("mapSearch");
   const hasDetailSearch = stepIndex >= guideStepIndexOf("detailSearch");
@@ -1207,6 +1415,7 @@ function GuideDataMapPreview({
   const hasLevel2 = stepIndex >= guideStepIndexOf("level2Node");
   const hasListClick = stepIndex >= guideStepIndexOf("dataList");
   const hasPortal = stepIndex >= guideStepIndexOf("portalLink");
+  const isNodeCloseupGuide = step.id === "level2Node";
   const sortKey: SortKey = "views";
   const activeKind: KindFilter = hasKind ? guideFixedKind : "all";
   const selectedOrgs = hasOrg ? [guideFixedOrg] : [];
@@ -1218,7 +1427,8 @@ function GuideDataMapPreview({
   const selectedCategoryLevel2: string = selectedTheme && (hasDetailSearch || hasKeyword || hasLevel2 || hasListClick || hasPortal)
     ? "과학기술진흥"
     : "";
-  const detailsOpen = Boolean(selectedTheme || selectedCategoryLevel2 || previewDetailQuery || hasListClick || hasPortal);
+  const detailsOpen =
+    !isNodeCloseupGuide && Boolean(selectedTheme || selectedCategoryLevel2 || previewDetailQuery || hasListClick || hasPortal);
   const showRecordDetail = hasPortal;
   const graphRevealLimit = selectedCategoryLevel2 ? 5000 : 50;
   const orgSelectionLabel =
@@ -1489,15 +1699,21 @@ function GuideDataMapPreview({
     }
     return map;
   }, [graphData.items]);
-  const selectedGraphNodeId = step.id === "portalLink" && selectedRecord
+  const selectedGraphNodeId = step.id === "level2Node" && subStepIndex >= 1 && selectedRecord
+    ? `record-${selectedRecord.id}`
+    : step.id === "portalLink" && selectedRecord
     ? `record-${selectedRecord.id}`
     : step.id === "level1Node" && selectedTheme
       ? level1NodeId(selectedTheme)
       : selectedCategoryLevel2 && selectedTheme && (hasDetailSearch || hasKeyword || hasLevel2 || hasListClick)
       ? level2NodeId(selectedTheme, selectedCategoryLevel2)
       : selectedTheme && (hasLevel1 || hasDetailSearch || hasKeyword)
-        ? level1NodeId(selectedTheme)
-        : "";
+      ? level1NodeId(selectedTheme)
+      : "";
+  const guideFocusNodeId =
+    isNodeCloseupGuide && selectedTheme && selectedCategoryLevel2
+      ? level2NodeId(selectedTheme, selectedCategoryLevel2)
+      : undefined;
   const handlePreviewNodeClick = useCallback(() => undefined, []);
   const registerPreviewControls = useCallback(() => undefined, []);
   const orgOptions = useMemo(() => {
@@ -1507,7 +1723,10 @@ function GuideDataMapPreview({
   }, [datasets]);
 
   return (
-    <section className="guide-preview-map" aria-label="실제 데이터맵 축소 화면">
+    <section
+      className={`guide-preview-map${isNodeCloseupGuide ? " guide-node-closeup" : ""}`}
+      aria-label="실제 데이터맵 축소 화면"
+    >
       <header className="map-header guide-preview-header">
         <div className="brand-area">
           <span className="brand-mark" aria-hidden="true">
@@ -1608,12 +1827,16 @@ function GuideDataMapPreview({
           </div>
           <NetworkGraph
             center={graphData.center}
+            focusAnchor={isNodeCloseupGuide ? { x: 0.5, y: 0.86 } : undefined}
+            focusNodeId={guideFocusNodeId}
+            focusScale={isNodeCloseupGuide ? 0.72 : undefined}
             items={graphData.items}
             labelHighlightTerm={previewQuery}
             onNodeClick={handlePreviewNodeClick}
             registerControls={registerPreviewControls}
             selectedNodeId={selectedGraphNodeId}
-            recordAngleStepPx={hasKeyword ? 9 : 11}
+            fitDurationMs={isNodeCloseupGuide ? 0 : undefined}
+            recordAngleStepPx={hasKeyword ? 16 : 18}
           />
           <div className="canvas-map-controls" aria-label="지도 확대 축소">
             <button className="fit-view-button" type="button" aria-label="전체 노드 펼치기">
@@ -1777,18 +2000,27 @@ function GuideTour({
   const [targetRect, setTargetRect] = useState<GuideTargetRect>(emptyGuideRect);
   const [subStepIndex, setSubStepIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
+  const [kindSelectPhase, setKindSelectPhase] = useState<GuideKindSelectPhase>("idle");
+  const [kindSelectRect, setKindSelectRect] = useState<GuideTargetRect>(emptyGuideRect);
+  const [nodeLabelFocusPath, setNodeLabelFocusPath] = useState("");
   const modalRef = useRef<HTMLDivElement | null>(null);
   const step = steps[stepIndex] ?? steps[0];
   const activeSubStep = step.substeps?.[subStepIndex % step.substeps.length];
-  const activeTargetSelectors = activeSubStep?.targetSelectors ?? step.targetSelectors;
-  const activeClickPoint = activeSubStep?.clickPoint ?? step.clickPoint;
+  const kindStepIndex = guideStepIndexOf("kind");
+  const isKindStep = step.id === "kind";
+  const isKindOptionTarget = isKindStep && (kindSelectPhase === "open" || kindSelectPhase === "selected");
+  const kindOptionTargetSelectors = useMemo(() => [".guide-select-option-hybrid"], []);
+  const activeTargetSelectors = isKindOptionTarget
+    ? kindOptionTargetSelectors
+    : activeSubStep?.targetSelectors ?? step.targetSelectors;
+  const activeClickPoint = isKindOptionTarget ? { x: 0.72, y: 0.5 } : activeSubStep?.clickPoint ?? step.clickPoint;
   const stepScript = step.body.join("\n");
-  const hasKind = stepIndex >= guideSteps.findIndex((item) => item.id === "kind");
+  const hasKind = stepIndex > kindStepIndex || (isKindStep && kindSelectPhase === "selected");
   const hasOrg = stepIndex >= guideSteps.findIndex((item) => item.id === "org");
   const hasMapSearch = stepIndex >= guideSteps.findIndex((item) => item.id === "mapSearch");
   const hasDetailSearch = stepIndex >= guideSteps.findIndex((item) => item.id === "detailSearch");
   const hasKeyword = stepIndex >= guideSteps.findIndex((item) => item.id === "keyword");
-  const hasLevel1 = stepIndex >= guideSteps.findIndex((item) => item.id === "level1Node");
+  const hasLevel1 = stepIndex >= guideSteps.findIndex((item) => item.id === "level2Node");
   const hasLevel2 = stepIndex >= guideSteps.findIndex((item) => item.id === "level2Node");
   const hasListClick = stepIndex >= guideSteps.findIndex((item) => item.id === "dataList");
   const hasPortal = stepIndex >= guideSteps.findIndex((item) => item.id === "portalLink");
@@ -1860,7 +2092,7 @@ function GuideTour({
   const demoKindLabel = hasKind ? "API/파일데이터" : "전체 유형";
   const demoOrgLabel = hasOrg ? guideFixedOrg : "전체 기관";
   const demoMapQuery = hasMapSearch ? demoMapTypedText : "";
-  const demoDetailQuery = hasPortal ? "데" : hasDetailSearch ? demoDetailTypedText : "";
+  const demoDetailQuery = hasPortal ? guideDetailSearchTerm : hasDetailSearch ? demoDetailTypedText : "";
   const guideFanRecords = guideFanRecordLabels.slice(0, 27);
   const guideCenterX = 430;
   const guideCenterY = 470;
@@ -1882,6 +2114,29 @@ function GuideTour({
   }, [open]);
 
   useEffect(() => {
+    if (!open) {
+      setKindSelectPhase("idle");
+      return;
+    }
+
+    if (step.id !== "kind") {
+      setKindSelectPhase(stepIndex > kindStepIndex ? "selected" : "idle");
+      return;
+    }
+
+    setKindSelectPhase("idle");
+    const timers = [
+      window.setTimeout(() => setKindSelectPhase("pressed"), 220),
+      window.setTimeout(() => setKindSelectPhase("open"), 520),
+      window.setTimeout(() => setKindSelectPhase("selected"), 920),
+    ];
+
+    return () => {
+      timers.forEach((timer) => window.clearTimeout(timer));
+    };
+  }, [kindStepIndex, open, step.id, stepIndex]);
+
+  useEffect(() => {
     if (!open) return;
 
     setTypedText("");
@@ -1892,7 +2147,7 @@ function GuideTour({
       if (index >= stepScript.length) {
         window.clearInterval(timer);
       }
-    }, 24);
+    }, 16);
 
     return () => window.clearInterval(timer);
   }, [open, stepScript]);
@@ -1918,7 +2173,7 @@ function GuideTour({
         if (next.length >= letters.length) window.clearInterval(timer);
         return next;
       });
-    }, 120);
+    }, 70);
 
     return () => window.clearInterval(timer);
   }, [open, step.id, stepIndex, steps]);
@@ -1944,7 +2199,7 @@ function GuideTour({
         if (next.length >= letters.length) window.clearInterval(timer);
         return next;
       });
-    }, 120);
+    }, 70);
 
     return () => window.clearInterval(timer);
   }, [open, step.id, stepIndex, steps]);
@@ -1954,7 +2209,7 @@ function GuideTour({
 
     const timer = window.setTimeout(() => {
       onStepChange(stepIndex + 1 >= steps.length ? stepIndex : stepIndex + 1);
-    }, 7200);
+    }, 5600);
 
     return () => window.clearTimeout(timer);
   }, [isPaused, onStepChange, open, stepIndex, steps.length]);
@@ -1964,7 +2219,7 @@ function GuideTour({
 
     const timer = window.setInterval(() => {
       setSubStepIndex((current) => Math.min(current + 1, step.substeps!.length - 1));
-    }, 1500);
+    }, 1050);
 
     return () => window.clearInterval(timer);
   }, [isPaused, open, step.substeps, subStepIndex]);
@@ -1972,11 +2227,26 @@ function GuideTour({
   useEffect(() => {
     if (!open) return;
 
+    const isStaticNodeFocusStep = step.id === "level1Node" || step.id === "level2Node";
+    const isStableOverviewStep = step.id === "level1Node";
     const updateTargetRect = () => {
+      if (isStaticNodeFocusStep) return;
       setTargetRect(findGuideTarget(activeTargetSelectors, modalRef.current));
     };
 
     updateTargetRect();
+    if (isStableOverviewStep || isStaticNodeFocusStep) {
+      const timers = [80, 180, 360, 720, 1100, 1500, 2200, 3000, 4000].map((delay) =>
+        window.setTimeout(updateTargetRect, delay),
+      );
+      window.addEventListener("resize", updateTargetRect);
+
+      return () => {
+        timers.forEach((timer) => window.clearTimeout(timer));
+        window.removeEventListener("resize", updateTargetRect);
+      };
+    }
+
     const interval = window.setInterval(updateTargetRect, 450);
     window.addEventListener("resize", updateTargetRect);
     window.addEventListener("scroll", updateTargetRect, true);
@@ -1986,7 +2256,56 @@ function GuideTour({
       window.removeEventListener("resize", updateTargetRect);
       window.removeEventListener("scroll", updateTargetRect, true);
     };
-  }, [activeTargetSelectors, open]);
+  }, [activeTargetSelectors, open, step.id, subStepIndex]);
+
+  useEffect(() => {
+    if (!open || step.id !== "kind") return;
+
+    const updateSelectRect = () => {
+      setKindSelectRect(findGuideTarget([".guide-preview-map .condition-select select"], modalRef.current));
+    };
+
+    updateSelectRect();
+    const interval = window.setInterval(updateSelectRect, 450);
+    window.addEventListener("resize", updateSelectRect);
+    window.addEventListener("scroll", updateSelectRect, true);
+
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("resize", updateSelectRect);
+      window.removeEventListener("scroll", updateSelectRect, true);
+    };
+  }, [open, step.id]);
+
+  useEffect(() => {
+    if (!open || step.id !== "level2Node") {
+      setNodeLabelFocusPath("");
+      return;
+    }
+
+    let hasLockedFocus = false;
+    setNodeLabelFocusPath("");
+    const updateNodeLabelFocusPath = () => {
+      if (hasLockedFocus) return;
+
+      const nextPath = findGuideRecordFocusPath(modalRef.current);
+      if (!nextPath) return;
+
+      hasLockedFocus = true;
+      setNodeLabelFocusPath(nextPath);
+    };
+    const animationFrame = window.requestAnimationFrame(updateNodeLabelFocusPath);
+    const timers = [80, 180, 360, 720, 1100, 1600, 2200, 2800, 3400].map((delay) =>
+      window.setTimeout(updateNodeLabelFocusPath, delay),
+    );
+    window.addEventListener("resize", updateNodeLabelFocusPath);
+
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+      timers.forEach((timer) => window.clearTimeout(timer));
+      window.removeEventListener("resize", updateNodeLabelFocusPath);
+    };
+  }, [open, step.id, subStepIndex]);
 
   useEffect(() => {
     if (!open) return;
@@ -2011,8 +2330,35 @@ function GuideTour({
   const viewportHeight = window.innerHeight;
   const cardWidth = Math.min(320, viewportWidth - 32);
   const cardHeight = 190;
-  const targetCenterX = targetRect.left + targetRect.width * activeClickPoint.x;
-  const targetCenterY = targetRect.top + targetRect.height * activeClickPoint.y;
+  const nodeGroupShellBounds =
+    step.id === "level1Node" || step.id === "level2Node"
+      ? modalRef.current
+          ?.querySelector<HTMLElement>(".guide-preview-map .network-shell")
+          ?.getBoundingClientRect()
+      : undefined;
+  const nodeOverviewTargetRect = nodeGroupShellBounds && step.id === "level1Node"
+    ? (() => {
+        const width = Math.min(760, nodeGroupShellBounds.width * 0.58);
+        const height = Math.min(560, nodeGroupShellBounds.height * 0.92);
+        return roundedGuideRect({
+          left: nodeGroupShellBounds.left + (nodeGroupShellBounds.width - width) / 2,
+          top: nodeGroupShellBounds.top + (nodeGroupShellBounds.height - height) / 2,
+          width,
+          height,
+        });
+      })()
+    : null;
+  const nodeCloseupTargetRect = nodeGroupShellBounds && step.id === "level2Node"
+    ? roundedGuideRect({
+        left: nodeGroupShellBounds.left + nodeGroupShellBounds.width * 0.41,
+        top: nodeGroupShellBounds.top + nodeGroupShellBounds.height * 0.006,
+        width: Math.min(130, nodeGroupShellBounds.width * 0.112),
+        height: Math.min(194, nodeGroupShellBounds.height * 0.39),
+      })
+    : null;
+  const activeTargetRect = nodeCloseupTargetRect ?? nodeOverviewTargetRect ?? targetRect;
+  const targetCenterX = activeTargetRect.left + activeTargetRect.width * activeClickPoint.x;
+  const targetCenterY = activeTargetRect.top + activeTargetRect.height * activeClickPoint.y;
   const panelGap = step.id === "kind" ? 84 : 26;
   const modalBounds = modalRef.current?.getBoundingClientRect();
   const boundaryLeft = modalBounds ? modalBounds.left + 12 : 16;
@@ -2020,15 +2366,15 @@ function GuideTour({
   const boundaryRight = modalBounds ? modalBounds.right - 12 : viewportWidth - 16;
   const boundaryBottom = modalBounds ? modalBounds.bottom - 78 : viewportHeight - 16;
   const spotlightStyle = {
-    left: targetRect.left - 8,
-    top: targetRect.top - 8,
-    width: targetRect.width + 16,
-    height: targetRect.height + 16,
+    left: activeTargetRect.left - 8,
+    top: activeTargetRect.top - 8,
+    width: activeTargetRect.width + 16,
+    height: activeTargetRect.height + 16,
   } as CSSProperties;
-  const spotlightLeft = Math.max(0, targetRect.left - 8);
-  const spotlightTop = Math.max(0, targetRect.top - 8);
-  const spotlightRight = Math.min(viewportWidth, targetRect.left + targetRect.width + 8);
-  const spotlightBottom = Math.min(viewportHeight, targetRect.top + targetRect.height + 8);
+  const spotlightLeft = Math.max(0, activeTargetRect.left - 8);
+  const spotlightTop = Math.max(0, activeTargetRect.top - 8);
+  const spotlightRight = Math.min(viewportWidth, activeTargetRect.left + activeTargetRect.width + 8);
+  const spotlightBottom = Math.min(viewportHeight, activeTargetRect.top + activeTargetRect.height + 8);
   const pointerStyle = {
     left: targetCenterX,
     top: targetCenterY,
@@ -2036,15 +2382,15 @@ function GuideTour({
 
   let panelLeft =
     step.panelSide === "left"
-      ? targetRect.left - cardWidth - panelGap
+      ? activeTargetRect.left - cardWidth - panelGap
       : step.panelSide === "right"
-        ? targetRect.left + targetRect.width + panelGap
-        : targetRect.left + targetRect.width / 2 - cardWidth / 2;
+        ? activeTargetRect.left + activeTargetRect.width + panelGap
+        : activeTargetRect.left + activeTargetRect.width / 2 - cardWidth / 2;
   let panelTop =
     step.panelSide === "top"
-      ? targetRect.top - cardHeight - panelGap
+      ? activeTargetRect.top - cardHeight - panelGap
       : step.panelSide === "bottom"
-        ? targetRect.top + targetRect.height + panelGap
+        ? activeTargetRect.top + activeTargetRect.height + panelGap
         : targetCenterY - cardHeight / 2;
 
   if (panelLeft < boundaryLeft || panelLeft + cardWidth > boundaryRight) {
@@ -2060,21 +2406,38 @@ function GuideTour({
     );
   }
 
+  if (step.id === "level2Node") {
+    panelLeft = clampNumber(
+      activeTargetRect.left - cardWidth - 28,
+      boundaryLeft,
+      Math.max(boundaryLeft, boundaryRight - cardWidth),
+    );
+    panelTop = clampNumber(
+      activeTargetRect.top + 24,
+      boundaryTop,
+      Math.max(boundaryTop, boundaryBottom - cardHeight),
+    );
+  }
+
   const panelStyle = {
     left: panelLeft,
     top: panelTop,
     width: cardWidth,
   } as CSSProperties;
   const selectPopoverStyle = {
-    left: spotlightLeft,
-    top: spotlightBottom + 8,
-    width: Math.max(180, Math.min(260, spotlightRight - spotlightLeft)),
+    left: kindSelectRect.width > 0 ? kindSelectRect.left : spotlightLeft,
+    top: kindSelectRect.width > 0 ? kindSelectRect.top + kindSelectRect.height + 8 : spotlightBottom + 8,
+    width: Math.max(180, Math.min(260, kindSelectRect.width > 0 ? kindSelectRect.width : spotlightRight - spotlightLeft)),
   } as CSSProperties;
   const panelAnchorX = clampNumber(targetCenterX, panelLeft, panelLeft + cardWidth);
   const panelAnchorY = clampNumber(targetCenterY, panelTop, panelTop + cardHeight);
   const typedLines = typedText.split("\n").filter(Boolean);
-  const showClickMotion = step.id !== "controls";
-  const showConnector = step.id !== "dataList";
+  const showSpotlight = true;
+  const showRectSpotlight = showSpotlight && step.id !== "level2Node";
+  const showPointer = step.id !== "level1Node" && step.id !== "level2Node";
+  const showClickMotion =
+    showPointer && step.id !== "controls" && (step.id !== "kind" || kindSelectPhase !== "idle");
+  const showConnector = step.id !== "dataList" && step.id !== "level2Node";
   const guideProgressLabel = `${step.badge}/${steps.length}`;
 
   return (
@@ -2091,7 +2454,9 @@ function GuideTour({
             crawledAt={crawledAt}
             datasets={datasets}
             detailQuery={demoDetailQuery}
+            kindCommitted={hasKind}
             mapQuery={demoMapQuery}
+            subStepIndex={subStepIndex}
             stepIndex={stepIndex}
           />
           <header className="map-header guide-sim-header">
@@ -2254,7 +2619,7 @@ function GuideTour({
                           <g
                             className="guide-record-fan-item"
                             key={label}
-                            style={{ "--fan-delay": `${index * 18}ms` } as CSSProperties}
+                            style={{ "--fan-delay": `${index * 10}ms` } as CSSProperties}
                           >
                             <line x1={guidePrimaryLevel2X} y1={guidePrimaryLevel2Y} x2={dotX} y2={dotY} />
                             <g transform={`translate(${dotX} ${dotY})`}>
@@ -2522,19 +2887,49 @@ function GuideTour({
           <line x1={targetCenterX} y1={targetCenterY} x2={panelAnchorX} y2={panelAnchorY} />
         </svg>
       ) : null}
-      <div className="guide-spotlight" style={spotlightStyle} />
+      {nodeLabelFocusPath ? (
+        <svg className="guide-custom-focus" aria-hidden="true">
+          <path className="guide-node-label-focus-path" d={nodeLabelFocusPath} />
+        </svg>
+      ) : null}
+      {showRectSpotlight ? (
+        <div
+          className={[
+            "guide-spotlight",
+            isKindOptionTarget ? "option-focus" : "",
+            step.id === "level2Node" ? "node-closeup-focus" : "",
+            step.id === "level1Node" || step.id === "level2Node" ? "node-group-focus" : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+          style={spotlightStyle}
+        />
+      ) : null}
       {showClickMotion ? <span className="guide-click-pulse" style={pointerStyle} /> : null}
-      <span className="guide-pointer" style={pointerStyle} />
-      {step.id === "kind" ? (
-        <div className="guide-select-popover" style={selectPopoverStyle} aria-hidden="true">
+      {showPointer ? <span className="guide-pointer" style={pointerStyle} /> : null}
+      {step.id === "kind" && (kindSelectPhase === "open" || kindSelectPhase === "selected") ? (
+        <div
+          className={`guide-select-popover phase-${kindSelectPhase}`}
+          style={selectPopoverStyle}
+          aria-hidden="true"
+        >
           <span>전체 유형</span>
           <span>API</span>
           <span>파일데이터</span>
-          <strong>API/파일데이터</strong>
+          <strong className="guide-select-option-hybrid">API/파일데이터</strong>
         </div>
       ) : null}
 
-      <section className="guide-callout" style={panelStyle}>
+      <section
+        className={[
+          "guide-callout",
+          step.id === "level2Node" ? "node-closeup-callout" : "",
+          step.id === "level1Node" || step.id === "level2Node" ? "node-group-callout" : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+        style={panelStyle}
+      >
         <div className="guide-callout-header">
           <div className="guide-callout-heading">
             <h2>{step.title}</h2>
@@ -2553,6 +2948,10 @@ function GuideTour({
 
 function NetworkGraph({
   center,
+  fitDurationMs = 120,
+  focusAnchor = { x: 0.5, y: 0.5 },
+  focusNodeId,
+  focusScale = 1,
   items,
   labelHighlightTerm,
   onNodeClick,
@@ -2561,6 +2960,10 @@ function NetworkGraph({
   selectedNodeId,
 }: {
   center: GraphItem;
+  fitDurationMs?: number;
+  focusAnchor?: { x: number; y: number };
+  focusNodeId?: string;
+  focusScale?: number;
   items: GraphItem[];
   labelHighlightTerm: string;
   onNodeClick: (item: GraphItem) => void;
@@ -2707,7 +3110,7 @@ function NetworkGraph({
 
       return -Math.PI / 2;
     };
-    const targetForItem = (item: GraphItem) => {
+    const targetForItem = (item: GraphItem): { x: number; y: number; angle: number } => {
       const angle = angleForItem(item);
       const radius =
         item.kind === "record" || item.kind === "overflow"
@@ -2837,6 +3240,7 @@ function NetworkGraph({
           d.kind,
           d.isCenter ? "center" : "",
           d.isEmpty ? "empty" : "",
+          d.id === selectedNodeId ? "active" : "",
         ]
           .filter(Boolean)
           .join(" "),
@@ -3266,7 +3670,7 @@ function NetworkGraph({
 
     svg.call(zoom);
 
-    const restoreTargetPositions = () => {
+      const restoreTargetPositions = () => {
       graphNodes.forEach((d) => {
         d.x = d.targetX;
         d.y = d.targetY;
@@ -3276,6 +3680,27 @@ function NetworkGraph({
 
     const fitGraph = () => {
       restoreTargetPositions();
+
+      const focusTargetId = focusNodeId || selectedNodeId;
+      const focusedNode =
+        (focusTargetId ? nodeById.get(focusTargetId) : undefined) ??
+        (focusScale > 0 && focusScale !== 1
+          ? graphNodes.find((graphNode) => graphNode.kind === "level2" && !graphNode.isEmpty)
+          : undefined);
+      if (focusedNode && focusScale > 0 && focusScale !== 1) {
+        const focusX = focusedNode.x ?? focusedNode.targetX;
+        const focusY = focusedNode.y ?? focusedNode.targetY;
+        const translateX = width * focusAnchor.x - focusScale * focusX;
+        const translateY = height * focusAnchor.y - focusScale * focusY;
+        svg
+          .transition()
+          .duration(fitDurationMs)
+          .call(
+            zoom.transform,
+            d3.zoomIdentity.translate(translateX, translateY).scale(focusScale),
+          );
+        return;
+      }
 
       const padding = 44;
       const bounds = {
@@ -3330,7 +3755,7 @@ function NetworkGraph({
 
       svg
         .transition()
-        .duration(200)
+        .duration(fitDurationMs)
         .call(zoom.transform, d3.zoomIdentity.translate(translateX, translateY).scale(scale));
     };
 
@@ -3339,38 +3764,23 @@ function NetworkGraph({
       movedRecordPositionsRef.current.clear();
       graphNodes.forEach((d) => {
         const item = itemsById.get(d.id);
-        const angle = item ? angleForItem(item) : 0;
-        const radius =
-          item?.kind === "record"
-            ? recordRadius
-            : item?.kind === "level2"
-              ? level2Radius
-              : item?.kind === "level1"
-                ? level1Radius
-                : 0;
-        const target = item
-          ? {
-            angle,
-            x: centerX + Math.cos(angle) * radius,
-            y: centerY + Math.sin(angle) * radius,
-          }
-          : { x: centerX, y: centerY, angle: 0 };
+        const target = item ? targetForItem(item) : { x: graphCenterX, y: graphCenterY, angle: 0 };
         d.targetX = target.x;
         d.targetY = target.y;
         d.angle = target.angle;
       });
       updateRecordLabelOrientation();
       restoreTargetPositions();
-      svg.transition().duration(200).call(zoom.transform, d3.zoomIdentity);
+      svg.transition().duration(120).call(zoom.transform, d3.zoomIdentity);
     };
 
     registerControls({
       fitAll: fitGraph,
       zoomIn: () => {
-        svg.transition().duration(300).call(zoom.scaleBy, 1.3);
+        svg.transition().duration(180).call(zoom.scaleBy, 1.3);
       },
       zoomOut: () => {
-        svg.transition().duration(300).call(zoom.scaleBy, 0.7);
+        svg.transition().duration(180).call(zoom.scaleBy, 0.7);
       },
       reset: resetGraph,
     });
@@ -3383,10 +3793,16 @@ function NetworkGraph({
     };
   }, [
     center,
+    fitDurationMs,
+    focusAnchor.x,
+    focusAnchor.y,
+    focusNodeId,
+    focusScale,
     items,
     onNodeClick,
     recordAngleStepPx,
     registerControls,
+    selectedNodeId,
     size.height,
     size.width,
   ]);
@@ -4348,7 +4764,16 @@ export function DataMapClient() {
         const guideRecord = sourceRecords.find((record) => record.키워드.length > 0) ?? sourceRecords[0];
         if (guideRecord) applyGuideRecordScope(guideRecord);
         const term = guideDetailSearchTerm;
-        typeInto(setDetailQuery, term);
+        setDetailQuery("");
+        const letters = [...term];
+        letters.forEach((_, index) => {
+          timers.push(window.setTimeout(() => {
+            setDetailQuery(letters.slice(0, index + 1).join(""));
+          }, 95 * (index + 1)));
+        });
+        timers.push(window.setTimeout(() => {
+          setDetailQuery(term);
+        }, 95 * letters.length + 200));
         setDatasetPage(0);
         setDetailsOpen(true);
         break;
@@ -4368,8 +4793,7 @@ export function DataMapClient() {
       case "level1Node": {
         setOrgMenuOpen(false);
         setSelectedId("");
-        const item = graphData.items.find((candidate) => candidate.kind === "level1" && !candidate.isEmpty);
-        if (item) handleGraphNodeClick(item as GraphItem);
+        setGraphRevealLimit(5000);
         break;
       }
       case "level2Node": {
@@ -4569,7 +4993,7 @@ export function DataMapClient() {
         </section>
       </header>
 
-      <section className="map-workspace">
+      <section className={`map-workspace${detailsOpen ? " with-detail" : ""}`}>
         <section className="network-shell" aria-label="공공데이터 네트워크 맵">
           <div className="network-toolbar">
             <button
