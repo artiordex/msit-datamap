@@ -156,6 +156,14 @@ jobs:
           path: crawler/debug_screenshots/*.png
           if-no-files-found: ignore
 
+      - name: Upload Crawler Videos
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: crawler-execution-videos
+          path: crawler/videos/*.webm
+          if-no-files-found: ignore
+
       - name: Validate crawl result
         run: |
           if [ "${DATAMAP_TOTAL:-0}" -eq 0 ]; then

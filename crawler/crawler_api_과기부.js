@@ -946,10 +946,12 @@ async function run() {
     headless: !headed,
     args: headed ? ['--start-maximized'] : [],
   });
+  const videoDir = path.join(__dirname, 'videos');
   const ctx     = await browser.newContext({
     userAgent: UA,
     ignoreHTTPSErrors: true,
-    viewport: headed ? null : undefined,
+    viewport: headed ? null : { width: 1280, height: 800 },
+    recordVideo: { dir: videoDir, size: { width: 1280, height: 800 } },
   });
   const page    = await ctx.newPage();
 
