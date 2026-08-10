@@ -148,6 +148,14 @@ jobs:
           ].join('\n'));
           NODE
 
+      - name: Upload Debug Screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: crawler-debug-screenshots
+          path: crawler/debug_screenshots/*.png
+          if-no-files-found: ignore
+
       - name: Validate crawl result
         run: |
           if [ "${DATAMAP_TOTAL:-0}" -eq 0 ]; then

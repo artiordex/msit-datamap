@@ -868,6 +868,16 @@ async function crawlOrg(page, ctx, orgName, detailCache, previousOrg = null) {
       result.counts.actual[`${typeLabel(dType)} 탭 수집`] = links.length;
       logger.info({ orgName, dType, count: links.length }, '링크 수집 완료');
 
+      if (links.length === 0) {
+        try {
+          const debugDir = path.join(__dirname, 'debug_screenshots');
+          if (!fs.existsSync(debugDir)) fs.mkdirSync(debugDir, { recursive: true });
+          const shotPath = path.join(debugDir, `${clean(orgName)}_${dType}.png`);
+          await page.screenshot({ path: shotPath, fullPage: true });
+          logger.info({ shotPath }, '수집 0건 디버그 스크린샷 저장');
+        } catch {}
+      }
+
       const cookie  = await getCookieHeader(ctx);
       const details = await scrapeAllDetails(links, cookie, dType, detailCache);
 
