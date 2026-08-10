@@ -638,7 +638,10 @@ async function switchResultTab(page, dType) {
   if (await tab.isVisible({ timeout: 3000 }).catch(() => false)) {
     // 검색 결과 화면에서 파일데이터 또는 오픈API 결과 탭을 누름
     await tab.click({ force: true });
-    await waitUi(800);
+    await page
+      .waitForSelector('.apply-result-item, .no-result-area, .no-data', { timeout: 15_000 })
+      .catch(() => null);
+    await waitUi(1500);
   }
 }
 
@@ -755,6 +758,11 @@ async function collectAllLinks(page, dType, maxItems = null) {
   const all = [];
   const seen = new Set();
   let pageNo = 1;
+
+  await page
+    .waitForSelector('.apply-result-item, .no-result-area, .no-data', { timeout: 15_000 })
+    .catch(() => null);
+  await waitUi(1200);
 
   while (true) {
     for (const link of await getLinksOnPage(page, dType)) {
@@ -950,8 +958,8 @@ async function run() {
   const ctx     = await browser.newContext({
     userAgent: UA,
     ignoreHTTPSErrors: true,
-    viewport: headed ? null : { width: 1280, height: 800 },
-    recordVideo: { dir: videoDir, size: { width: 1280, height: 800 } },
+    viewport: headed ? null : { width: 1920, height: 1080 },
+    recordVideo: { dir: videoDir, size: { width: 1920, height: 1080 } },
   });
   const page    = await ctx.newPage();
 
