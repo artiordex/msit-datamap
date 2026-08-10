@@ -663,7 +663,7 @@ function validateCollectedCounts(result, tabCounts, maxItems) {
   const hybridIds = new Set();
 
   for (const item of [...result.file, ...result.api]) {
-    const id = datasetId(item['링크']) || item['링크'] || item['제목'];
+    const id = datasetIdentity(item);
     if (!id) continue;
     if (item['유형'] === 'API') apiIds.add(id);
     else if (item['유형'] === 'API/파일데이터') {
