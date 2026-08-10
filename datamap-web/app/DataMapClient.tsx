@@ -2899,6 +2899,9 @@ export function DataMapClient() {
                 <Icon name="search" size={14} />
                 <span>추천 검색어</span>
               </div>
+              <button className="keyword-prev-btn" type="button" onClick={() => moveKeywordPage(-1)} aria-label="이전 키워드">
+                <Icon name="chevronLeft" size={15} />
+              </button>
               <div
                 className={`keyword-pager${isKeywordDragging ? " dragging" : ""}`}
                 ref={keywordPagerRef}
